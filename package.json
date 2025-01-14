@@ -1,0 +1,31 @@
+{
+  "name": "nuxt-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare && node scripts/setup-ffmpeg.js",
+    "setup-ffmpeg": "node scripts/setup-ffmpeg.js",
+    "backup": "curl -X POST http://localhost:3000/api/backup/create",
+    "backup:list": "curl http://localhost:3000/api/backup/list",
+    "backup:restore": "curl -X POST -H \"Content-Type: application/json\" -d '{\"backupPath\":\"$BACKUP_PATH\"}' http://localhost:3000/api/backup/restore"
+  },
+  "dependencies": {
+    "@css-render/vue3-ssr": "^0.15.14",
+    "@ffmpeg/core": "0.12.6",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@pinia/nuxt": "^0.9.0",
+    "jszip": "^3.10.1",
+    "naive-ui": "^2.41.0",
+    "nuxt": "^3.15.1",
+    "pinia": "^2.3.0",
+    "vue": "latest",
+    "vue-router": "latest",
+    "wavesurfer.js": "^7.8.16"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

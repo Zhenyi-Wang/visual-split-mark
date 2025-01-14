@@ -1,0 +1,74 @@
+# Visual Split Mark 项目分析与计划
+
+## 当前任务：使用 JSON 文件存储数据
+
+### 数据结构设计
+```typescript
+// 项目数据
+interface ProjectData {
+  projects: Project[];
+  audioFiles: AudioFile[];
+  annotations: Annotation[];
+  settings: Record<string, string>;
+  version: string;
+  lastBackup?: string;
+}
+
+// 数据文件结构
+storage/
+  ├── data/
+  │   ├── projects.json     # 项目数据
+  │   └── settings.json     # 全局设置
+  ├── uploads/             # 原始音频文件
+  ├── converted/           # 转换后的 WAV 文件
+  └── backups/            # 数据备份
+```
+
+### 步骤计划
+1. 数据存储实现
+   [X] 创建数据存储工具类
+       - 读写 JSON 文件
+       - 自动备份机制
+       - 错误处理和恢复
+
+2. 功能增强
+   [X] 添加数据备份/恢复功能
+   [X] 添加数据导出/导入功能
+   [X] 添加错误恢复机制
+
+### 已完成功能
+1. 数据存储
+   - JSON 文件读写
+   - 自动备份机制
+   - 错误处理和恢复
+
+2. 状态管理
+   - 加载状态管理
+   - 错误状态管理
+   - 数据持久化
+
+3. API 实现
+   - 备份创建 API (/api/backup/create)
+   - 备份列表 API (/api/backup/list)
+   - 备份恢复 API (/api/backup/restore)
+
+4. 工具命令
+   - 备份命令 (yarn backup)
+   - 备份列表命令 (yarn backup:list)
+   - 备份恢复命令 (yarn backup:restore)
+
+5. 文档更新
+   - 存储模块文档 (docs/dev_docs/core/storage.md)
+
+### 总结
+1. 实现了基于 JSON 文件的数据存储
+2. 实现了完整的数据备份和恢复功能
+3. 添加了错误处理和状态管理
+4. 提供了命令行工具
+5. 更新了开发文档
+
+### 下一步建议
+1. 添加数据导入/导出功能
+2. 实现自动备份调度
+3. 添加数据压缩功能
+4. 实现增量备份 
