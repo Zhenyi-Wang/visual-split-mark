@@ -1,0 +1,72 @@
+{
+  "projects": [
+    {
+      "id": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "name": "111",
+      "description": "",
+      "createdAt": "2025-01-14T09:30:33.349Z",
+      "updatedAt": "2025-01-14T09:30:33.349Z"
+    }
+  ],
+  "audioFiles": [
+    {
+      "id": "f5f48c5a-3588-4e07-a708-b7693534efff",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:15:51.647Z",
+      "updatedAt": "2025-01-14T09:15:51.647Z"
+    },
+    {
+      "id": "4d919f02-5181-4b1d-bc76-464643e8decb",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:21:59.133Z",
+      "updatedAt": "2025-01-14T09:21:59.133Z"
+    },
+    {
+      "id": "db916972-77a7-4da3-9769-8a429e8d409e",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:23:04.888Z",
+      "updatedAt": "2025-01-14T09:23:04.888Z"
+    },
+    {
+      "id": "34536d88-75b3-4e9c-823a-be12e5a4536e",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:24:34.203Z",
+      "updatedAt": "2025-01-14T09:24:34.203Z"
+    },
+    {
+      "id": "a0cef69a-1ee3-4a22-a584-419c18bfe6ed",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "storage/uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "storage/uploads/ef61ff3c-c1eb-487e-8197-0f71ddfbcea5.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:32:43.360Z",
+      "updatedAt": "2025-01-14T09:32:43.360Z"
+    }
+  ],
+  "annotations": [],
+  "settings": {},
+  "version": "1.0.0",
+  "lastBackup": "2025-01-14T09-32-41-518Z"
+}

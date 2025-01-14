@@ -201,17 +201,13 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
   currentStatus.value = '上传文件'
   
   try {
-    // 生成随机文件名
-    const originalId = nanoid()
-    const wavId = nanoid()
-    
     // 生成文件路径
     const newAudioFile: AudioFile = {
       id: nanoid(),
       projectId: currentProject.value.id,
       originalName: file.file.name,
-      originalPath: `storage/uploads/${originalId}.mp3`,
-      wavPath: `storage/converted/${wavId}.wav`,
+      originalPath: `storage/uploads/${file.file.name}`,
+      wavPath: `storage/converted/${nanoid()}.wav`,
       duration: 0,
       status: 'uploaded',
       createdAt: new Date(),

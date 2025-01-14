@@ -2,26 +2,6 @@
 
 本模块负责与 Whisper API 的集成，提供音频文本识别功能。支持自定义 API 端点，可以使用 OpenAI 的官方 API 或自托管的 Whisper 服务。
 
-## 音频格式要求
-
-为了获得最佳的识别效果，音频文件需要满足以下要求：
-
-1. **采样率**：16kHz
-   - 这是 Whisper 模型训练数据的标准采样率
-   - 其他采样率会被自动重采样，可能影响识别质量
-
-2. **声道数**：单声道
-   - 语音识别不需要空间音频信息
-   - 多声道音频会被自动混音为单声道
-
-3. **编码格式**：16位 PCM WAV
-   - 无损格式，保证音频质量
-   - 避免多次转码导致的质量损失
-
-4. **音频长度**
-   - 建议每个片段不超过 30 分钟
-   - 过长的音频建议分段处理
-
 ## 配置接口
 
 ```typescript
@@ -99,6 +79,21 @@ try {
   console.log('识别结果:', text)
 } catch (error) {
   console.error('识别失败:', error)
+}
+```
+
+3. **批量处理**
+```typescript
+async function transcribeSegments(segments: AudioSegment[]): Promise<void> {
+  for (const segment of segments) {
+    try {
+      const text = await whisperService.transcribe(segment.audioBlob)
+      segment.whisperText = text
+    } catch (error) {
+      console.error(`段落 ${segment.id} 识别失败:`, error)
+      segment.whisperText = null
+    }
+  }
 }
 ```
 
@@ -192,10 +187,94 @@ class WhisperService {
 }
 ```
 
+2. **缓存结果**
+```typescript
+class WhisperService {
+  private cache = new Map<string, string>()
+
+  async transcribe(audioBlob: Blob): Promise<string> {
+    const hash = await this.hashAudio(audioBlob)
+    if (this.cache.has(hash)) {
+      return this.cache.get(hash)!
+    }
+
+    const text = await this._transcribe(audioBlob)
+    this.cache.set(hash, text)
+    return text
+  }
+
+  private async hashAudio(blob: Blob): Promise<string> {
+    const buffer = await blob.arrayBuffer()
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  }
+}
+```
+
+## 配置示例
+
+1. **OpenAI API**
+```typescript
+const openaiWhisper = new WhisperService({
+  apiEndpoint: 'https://api.openai.com/v1/audio/transcriptions',
+  apiKey: process.env.OPENAI_API_KEY,
+  model: 'whisper-1',
+  language: 'zh'
+})
+```
+
+2. **自托管服务**
+```typescript
+const selfHostedWhisper = new WhisperService({
+  apiEndpoint: 'http://localhost:9000/transcribe',
+  model: 'base.en',
+  language: 'en'
+})
+```
+
+## 测试
+
+1. **单元测试**
+```typescript
+describe('WhisperService', () => {
+  let service: WhisperService
+
+  beforeEach(() => {
+    service = new WhisperService({
+      apiEndpoint: 'http://test-api.local',
+      apiKey: 'test-key'
+    })
+  })
+
+  it('should transcribe audio', async () => {
+    const blob = new Blob(['test'], { type: 'audio/wav' })
+    const result = await service.transcribe(blob)
+    expect(result).toBe('测试文本')
+  })
+
+  it('should handle API errors', async () => {
+    // ... 错误处理测试 ...
+  })
+})
+```
+
+2. **集成测试**
+```typescript
+describe('Whisper Integration', () => {
+  it('should transcribe real audio', async () => {
+    const audioFile = await loadTestAudio('test.wav')
+    const text = await whisperService.transcribe(audioFile)
+    expect(text).toMatch(/[\u4e00-\u9fa5]+/) // 包含中文字符
+  })
+})
+```
+
 ## 最佳实践
 
 1. **音频预处理**
-   - 确保音频格式符合要求
+   - 确保音频格式正确
    - 控制音频长度
    - 优化音频质量
 

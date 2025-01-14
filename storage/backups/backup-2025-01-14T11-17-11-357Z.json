@@ -1,0 +1,171 @@
+{
+  "projects": [
+    {
+      "id": "b3b3bd1e-d40b-4eab-be2a-ca2a9aa1ee95",
+      "name": "1",
+      "description": "",
+      "createdAt": "2025-01-14T11:16:33.538Z",
+      "updatedAt": "2025-01-14T11:16:33.538Z"
+    }
+  ],
+  "audioFiles": [
+    {
+      "id": "f5f48c5a-3588-4e07-a708-b7693534efff",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:15:51.647Z",
+      "updatedAt": "2025-01-14T09:15:51.647Z"
+    },
+    {
+      "id": "4d919f02-5181-4b1d-bc76-464643e8decb",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:21:59.133Z",
+      "updatedAt": "2025-01-14T09:21:59.133Z"
+    },
+    {
+      "id": "db916972-77a7-4da3-9769-8a429e8d409e",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:23:04.888Z",
+      "updatedAt": "2025-01-14T09:23:04.888Z"
+    },
+    {
+      "id": "34536d88-75b3-4e9c-823a-be12e5a4536e",
+      "projectId": "8b76a084-a61c-43b0-83a6-a43fe9f8fff6",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:24:34.203Z",
+      "updatedAt": "2025-01-14T09:24:34.203Z"
+    },
+    {
+      "id": "3f7a77cc-879d-417c-9c78-68790085cea1",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "storage/uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "storage/uploads/f60ea899-d931-48f9-bea6-877363ab18d7.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:41:22.451Z",
+      "updatedAt": "2025-01-14T09:41:22.451Z"
+    },
+    {
+      "id": "35a58f9a-ae4f-40f2-8e20-e9379d3c48e4",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "storage/uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "storage/uploads/082f90d0-3317-4800-9220-217931104003.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:43:49.590Z",
+      "updatedAt": "2025-01-14T09:43:49.590Z"
+    },
+    {
+      "id": "e0eb7ed7-2292-4d04-8721-debe19a522ba",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "storage/uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "storage/uploads/aa310d21-c30a-4f7d-a135-83fb2ae4c5fd.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:47:05.360Z",
+      "updatedAt": "2025-01-14T09:47:05.360Z"
+    },
+    {
+      "id": "c0500ddc-411e-4c1b-ba3a-7b1667fe8aad",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "storage/uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "storage/uploads/6a71b2d0-b12f-4cda-8ea1-2675609040bf.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T09:50:49.183Z",
+      "updatedAt": "2025-01-14T09:50:49.183Z"
+    },
+    {
+      "id": "bbdd3e2b-0227-4fb8-888f-490a91db4ff7",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "2024-12-29主日上午1 李成义牧师.mp3",
+      "originalPath": "storage/uploads/2024-12-29主日上午1 李成义牧师.mp3",
+      "wavPath": "storage/uploads/33b7c130-d8ae-41bd-ba98-062d01f1cf01.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T11:01:41.421Z",
+      "updatedAt": "2025-01-14T11:01:41.421Z"
+    },
+    {
+      "id": "a2d72343-7e68-4619-bee1-25e0634c27a5",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "test.mp3",
+      "originalPath": "storage/uploads/test.mp3",
+      "wavPath": "storage/uploads/b4b73b51-6a19-4f09-a0c1-cfa7b7ae8e18.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T11:03:22.574Z",
+      "updatedAt": "2025-01-14T11:03:22.574Z"
+    },
+    {
+      "id": "8cb7e7a7-fe1e-4f6a-8e08-b88763c84176",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "test.mp3",
+      "originalPath": "storage/uploads/test.mp3",
+      "wavPath": "storage/uploads/c806efd0-78be-4fae-b997-f3f322db743f.wav",
+      "duration": 0,
+      "status": "ready",
+      "createdAt": "2025-01-14T11:06:03.300Z",
+      "updatedAt": "2025-01-14T11:06:08.503Z"
+    },
+    {
+      "id": "b7bea7f8-77a6-42d5-b89c-4980ed283373",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "test.mp3",
+      "originalPath": "storage/uploads/test.mp3",
+      "wavPath": "storage/uploads/1e00c404-d485-4655-9d0c-dd4048c97cc9.wav",
+      "duration": 0,
+      "status": "ready",
+      "createdAt": "2025-01-14T11:07:55.886Z",
+      "updatedAt": "2025-01-14T11:08:01.154Z"
+    },
+    {
+      "id": "01e1db06-28c2-4f96-955e-b842722e6412",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "test.mp3",
+      "originalPath": "storage/uploads/test.mp3",
+      "wavPath": "storage/uploads/de83c007-e5d7-4871-aa06-c6fb21a542f6.wav",
+      "duration": 0,
+      "status": "uploaded",
+      "createdAt": "2025-01-14T11:12:05.555Z",
+      "updatedAt": "2025-01-14T11:12:05.555Z"
+    },
+    {
+      "id": "boe4PARujR7Z5KcDKADzn",
+      "projectId": "9f8ccd9e-03c4-42fa-acae-8e81bb7e103f",
+      "originalName": "test.mp3",
+      "originalPath": "storage/uploads/test.mp3",
+      "wavPath": "storage/converted/8QpkM2HEXrJ1PNCPc-GLd.wav",
+      "duration": 0,
+      "status": "ready",
+      "createdAt": "2025-01-14T11:14:27.365Z",
+      "updatedAt": "2025-01-14T11:14:32.507Z"
+    }
+  ],
+  "annotations": [],
+  "settings": {},
+  "version": "1.0.0",
+  "lastBackup": "2025-01-14T11-17-11-357Z"
+}
