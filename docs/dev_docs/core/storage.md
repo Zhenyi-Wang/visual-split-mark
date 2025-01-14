@@ -25,10 +25,21 @@ storage/
   ├── data/
   │   ├── projects.json     # 项目数据
   │   └── settings.json     # 全局设置
-  ├── uploads/             # 原始音频文件
-  ├── converted/           # 转换后的 WAV 文件
+  ├── uploads/             # 原始音频文件（使用随机ID命名）
+  ├── converted/           # 转换后的 WAV 文件（使用随机ID命名）
   └── backups/            # 数据备份
 ```
+
+## 文件命名规则
+
+1. 原始音频文件：
+   - 路径格式：`storage/uploads/{随机ID}.mp3`
+   - 原始文件名保存在数据库的 `originalName` 字段中
+
+2. 转换后的 WAV 文件：
+   - 路径格式：`storage/converted/{随机ID}.wav`
+   - 使用 16kHz 采样率、单声道、16位 PCM 格式
+   - 格式针对 Whisper 模型优化
 
 ## API
 
@@ -62,63 +73,37 @@ async saveAnnotations(annotations: Annotation[]): Promise<void>
 async loadAnnotations(): Promise<Annotation[]>
 ```
 
-### 设置管理
-
-```typescript
-// 保存全局设置
-async saveSettings(settings: Record<string, string>): Promise<void>
-
-// 加载全局设置
-async loadSettings(): Promise<Record<string, string>>
-```
-
 ### 备份管理
 
 ```typescript
 // 创建备份
-async createBackup(data: ProjectData): Promise<string>
+async createBackup(): Promise<string>
 
 // 从备份恢复
-async restoreFromBackup(backupPath: string): Promise<ProjectData>
+async restoreFromBackup(backupPath: string): Promise<void>
 
 // 列出所有备份
 async listBackups(): Promise<string[]>
 ```
 
-## 命令行工具
-
-项目提供了一些命令行工具来管理数据：
-
-```bash
-# 创建数据备份
-yarn backup
-
-# 列出所有备份
-yarn backup:list
-
-# 从备份恢复数据
-BACKUP_PATH=storage/backups/backup-xxx.json yarn backup:restore
-```
-
-## 错误处理
-
-所有的存储操作都包含错误处理机制：
-
-1. 文件不存在时返回默认值
-2. 写入失败时抛出异常
-3. 数据格式错误时抛出异常
-
-## 自动备份
-
-在以下情况下会自动创建备份：
-
-1. 保存项目数据时
-2. 保存音频文件数据时
-3. 保存标注数据时
-
 ## 最佳实践
 
-1. 总是使用提供的 API 进行数据操作
-2. 定期创建数据备份
-3. 在进行重要操作前创建备份
-4. 使用错误处理机制处理异常情况 
+1. 文件命名
+   - 使用随机 ID 作为文件名，避免冲突和特殊字符问题
+   - 原始文件名保存在数据库中，用于显示
+
+2. 目录结构
+   - 原始文件和转换后的文件分开存储
+   - 使用不同目录便于管理和备份
+
+3. 音频格式
+   - WAV 文件使用 Whisper 模型推荐的格式
+   - 16kHz 采样率、单声道、16位 PCM
+
+4. 错误处理
+   - 文件操作需要适当的错误处理
+   - 保持数据库和文件系统的一致性
+
+5. 备份策略
+   - 定期创建数据备份
+   - 备份包含数据库和音频文件 

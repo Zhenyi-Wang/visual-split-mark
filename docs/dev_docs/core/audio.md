@@ -1,151 +1,112 @@
 # 音频处理模块
 
-音频处理模块是 Visual Split Mark 的核心功能之一，负责音频文件的转码、分割和时长获取等操作。本模块主要基于 FFmpeg.js 实现。
+音频处理模块是 Visual Split Mark 的核心功能之一，负责音频文件的转码、分割和时长获取等操作。本模块基于服务器端 FFmpeg 实现。
 
-## 核心类：AudioProcessor
+## 音频转换
 
-`AudioProcessor` 类封装了所有音频处理相关的功能，位于 `utils/audio.ts`。
+### 转换流程
 
-### 初始化
+1. 文件上传
+   - 原始文件使用随机 ID 命名
+   - 保存到 `storage/uploads` 目录
+
+2. 格式转换
+   - 使用服务器端 FFmpeg 进行转换
+   - 输出保存到 `storage/converted` 目录
+   - 使用随机 ID 命名
+
+### 转换参数
+
+转换参数针对 Whisper 模型优化：
+
+```bash
+ffmpeg -i input.mp3 \
+  -ar 16000 \    # 采样率 16kHz
+  -ac 1 \        # 单声道
+  -c:a pcm_s16le # 16位 PCM
+  output.wav
+```
+
+参数说明：
+- 采样率 16kHz：符合 Whisper 模型的训练数据格式
+- 单声道：语音识别不需要空间音频信息
+- 16位 PCM：无损格式，保证音频质量
+
+## API 接口
+
+### 文件上传
 
 ```typescript
-class AudioProcessor {
-  private ffmpeg: FFmpeg | null = null
-  private isLoaded = false
-  private baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
-
-  async load() {
-    if (this.isLoaded) return
-
-    this.ffmpeg = new FFmpeg()
-    await this.ffmpeg.load({
-      coreURL: await toBlobURL(`${this.baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${this.baseURL}/ffmpeg-core.wasm`, 'application/wasm')
-    })
-
-    this.isLoaded = true
-  }
+// 上传文件
+POST /api/file/save
+Body: {
+  path: string       // 保存路径
+  data: Uint8Array   // 文件数据
+  isFirstChunk: boolean
+  isLastChunk: boolean
 }
 ```
 
-### 主要功能
-
-1. **音频转码** (`convertToWav`)
-   - 将 MP3 文件转换为 16KHz 单声道 WAV 格式
-   - 支持进度回调
-   - 自动清理临时文件
+### 格式转换
 
 ```typescript
-async convertToWav(
-  inputFile: File, 
-  progressCallback?: (progress: number) => void
-): Promise<Blob>
+// 转换格式
+POST /api/file/convert
+Body: {
+  inputPath: string  // 输入文件路径
+  outputPath: string // 输出文件路径
+}
 ```
 
-2. **获取音频时长** (`getAudioDuration`)
-   - 使用 FFprobe 命令获取音频文件时长
-   - 从输出日志中解析时长信息
+### 文件删除
 
 ```typescript
-async getAudioDuration(file: File): Promise<number>
+// 删除文件
+POST /api/file/delete
+Body: {
+  path: string      // 文件路径
+}
 ```
 
-3. **音频分割** (`extractSegment`)
-   - 从 WAV 文件中提取指定时间段的音频
-   - 保持原始音频格式和质量
+## 错误处理
 
-```typescript
-async extractSegment(
-  audioBlob: Blob, 
-  start: number, 
-  end: number
-): Promise<Blob>
-```
+1. 文件上传
+   - 检查文件类型
+   - 验证文件大小
+   - 确保目录存在
 
-## 使用示例
+2. 格式转换
+   - 检查输入文件存在
+   - 监控转换进程
+   - 捕获 FFmpeg 错误
 
-1. **初始化**
-```typescript
-import { audioProcessor } from '~/utils/audio'
+3. 文件删除
+   - 检查文件存在
+   - 确保权限正确
 
-// 在使用其他功能前先加载 FFmpeg
-await audioProcessor.load()
-```
+## 状态管理
 
-2. **转换音频**
-```typescript
-const mp3File = new File([...], 'input.mp3', { type: 'audio/mp3' })
-const wavBlob = await audioProcessor.convertToWav(mp3File, (progress) => {
-  console.log(`转换进度: ${progress * 100}%`)
-})
-```
+音频文件状态：
+- `uploaded`: 文件已上传
+- `converting`: 正在转换
+- `ready`: 转换完成
+- `error`: 转换失败
 
-3. **获取时长**
-```typescript
-const duration = await audioProcessor.getAudioDuration(mp3File)
-console.log(`音频时长: ${duration} 秒`)
-```
+## 最佳实践
 
-4. **分割音频**
-```typescript
-const segment = await audioProcessor.extractSegment(wavBlob, 10, 20)
-// 提取 10-20 秒的片段
-```
+1. 文件命名
+   - 使用随机 ID 避免冲突
+   - 原始文件名保存在数据库
 
-## 注意事项
+2. 错误处理
+   - 详细的错误日志
+   - 适当的用户提示
 
-1. **内存管理**
-   - FFmpeg.js 在浏览器中运行，注意内存使用
-   - 及时清理不再需要的文件
-   - 避免同时处理多个大文件
+3. 性能优化
+   - 服务器端转换减轻浏览器负担
+   - 分块上传大文件
 
-2. **错误处理**
-   - 所有方法都可能抛出异常
-   - 建议使用 try-catch 包装所有调用
-   - 提供用户友好的错误提示
-
-3. **性能优化**
-   - 转码和分割是耗时操作
-   - 建议显示进度条和取消选项
-   - 考虑使用 Web Worker
-
-## 常见问题
-
-1. **FFmpeg 加载失败**
-   - 检查网络连接
-   - 确保 CDN 可访问
-   - 考虑本地托管 FFmpeg 文件
-
-2. **内存溢出**
-   - 限制同时处理的文件数量
-   - 分批处理大文件
-   - 及时释放资源
-
-3. **格式兼容性**
-   - 目前仅支持 MP3 输入
-   - 输出固定为 16KHz WAV
-   - 需要其他格式请提交 issue
-
-## 开发计划
-
-1. **短期**
-   - 添加更多音频格式支持
-   - 优化转码性能
-   - 添加音频预览功能
-
-2. **中期**
-   - 实现音频流处理
-   - 添加音频效果处理
-   - 优化内存使用
-
-3. **长期**
-   - 支持服务器端处理
-   - 实现实时转码
-   - 添加批处理功能
-
-## 相关文档
-
-- [FFmpeg.js 文档](https://github.com/ffmpegwasm/ffmpeg.wasm)
-- [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
-- [音频文件规范](../api/audio.md)
-- [状态管理](../store/audio.md) 
+4. 安全性
+   - 验证文件类型
+   - 限制文件大小
+   - 安全的文件命名 

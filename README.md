@@ -6,7 +6,8 @@
 
 - 音频文件管理
   - 支持 MP3 格式音频上传
-  - 自动转换为 WAV 格式
+  - 服务器端转换为 WAV 格式
+  - 分块上传大文件
   - 音频波形可视化
 
 - 标注功能
@@ -25,7 +26,7 @@
 - Nuxt 3 + TypeScript
 - Naive UI 组件库
 - Pinia 状态管理
-- FFmpeg 音频处理
+- FFmpeg 音频处理（服务器端）
 - Wavesurfer.js 波形显示
 
 ## 安装和使用
@@ -52,8 +53,8 @@ yarn build
 ```
 storage/
   ├── data/        # 项目数据
-  ├── uploads/     # 原始音频文件
-  ├── converted/   # 转换后的音频文件
+  ├── uploads/     # 原始音频文件（使用随机ID命名）
+  ├── converted/   # 转换后的音频文件（使用随机ID命名）
   └── backups/     # 数据备份
 ```
 
@@ -82,8 +83,9 @@ BACKUP_PATH=storage/backups/backup-xxx.json yarn backup:restore
 
 1. 音频文件处理
    - 目前仅支持 MP3 格式输入
-   - 自动转换为 16kHz WAV 格式
-   - 音频文件会占用较大存储空间
+   - 服务器端自动转换为 16kHz 单声道 WAV 格式
+   - 使用随机 ID 命名文件，避免冲突
+   - 原始文件名保存在数据库中
 
 2. 数据存储
    - 使用 JSON 文件存储项目数据
@@ -107,3 +109,16 @@ BACKUP_PATH=storage/backups/backup-xxx.json yarn backup:restore
 ## 许可证
 
 MIT
+
+## 数据存储
+
+项目使用JSON文件存储数据，所有数据文件位于 `storage/data` 目录下：
+
+- `projects.json`: 存储项目基本信息
+- `audio_files.json`: 存储音频文件信息
+- `annotations.json`: 存储标注数据
+- `settings.json`: 存储应用设置
+
+音频文件存储在以下目录：
+- `storage/uploads`: 存储上传的原始音频文件
+- `storage/converted`: 存储转换后的WAV文件

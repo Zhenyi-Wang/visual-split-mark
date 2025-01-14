@@ -5,45 +5,47 @@ import { storage } from '~/utils/storage'
 export const useProjectStore = defineStore('project', {
   state: () => ({
     projects: [] as Project[],
-    currentProject: null as Project | null,
     audioFiles: [] as AudioFile[],
-    currentAudioFile: null as AudioFile | null,
     annotations: [] as Annotation[],
+    currentProject: null as Project | null,
+    currentAudioFile: null as AudioFile | null,
     loading: false,
     error: null as string | null
   }),
 
-  getters: {
-    projectAudioFiles: (state) => {
-      const currentProject = state.currentProject
-      if (!currentProject) return []
-      return state.audioFiles.filter(f => f.projectId === currentProject.id)
-    },
-
-    audioFileAnnotations: (state) => {
-      const currentAudioFile = state.currentAudioFile
-      if (!currentAudioFile) return []
-      return state.annotations.filter(a => a.audioFileId === currentAudioFile.id)
-    }
-  },
-
   actions: {
-    async initialize() {
+    async loadAll() {
       this.loading = true
       this.error = null
-
       try {
-        const [projects, audioFiles, annotations] = await Promise.all([
-          storage.loadProjects(),
-          storage.loadAudioFiles(),
-          storage.loadAnnotations()
-        ])
-        this.projects = projects
-        this.audioFiles = audioFiles
-        this.annotations = annotations
+        const data = await storage.loadData()
+        this.projects = data.projects
+        this.audioFiles = data.audioFiles
+        this.annotations = data.annotations
       } catch (error) {
-        console.error('Failed to initialize store:', error)
+        console.error('Failed to load data:', error)
         this.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async saveAll() {
+      this.loading = true
+      this.error = null
+      try {
+        await storage.saveData({
+          projects: this.projects,
+          audioFiles: this.audioFiles,
+          annotations: this.annotations,
+          settings: {},
+          version: '1.0.0'
+        })
+      } catch (error) {
+        console.error('Failed to save data:', error)
+        this.error = error instanceof Error ? error.message : String(error)
+        throw error
       } finally {
         this.loading = false
       }
@@ -52,17 +54,14 @@ export const useProjectStore = defineStore('project', {
     async createProject(name: string, description?: string) {
       this.loading = true
       this.error = null
-
       try {
         const project: Project = {
           id: crypto.randomUUID(),
           name,
-          description,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          description
         }
         this.projects.push(project)
-        await storage.saveProjects(this.projects)
+        await this.saveAll()
         return project
       } catch (error) {
         console.error('Failed to create project:', error)
@@ -76,15 +75,11 @@ export const useProjectStore = defineStore('project', {
     async updateProject(project: Project) {
       this.loading = true
       this.error = null
-
       try {
         const index = this.projects.findIndex(p => p.id === project.id)
         if (index > -1) {
-          this.projects[index] = {
-            ...project,
-            updatedAt: new Date()
-          }
-          await storage.saveProjects(this.projects)
+          this.projects[index] = project
+          await this.saveAll()
         }
       } catch (error) {
         console.error('Failed to update project:', error)
@@ -98,7 +93,6 @@ export const useProjectStore = defineStore('project', {
     async deleteProject(id: string) {
       this.loading = true
       this.error = null
-
       try {
         const index = this.projects.findIndex(p => p.id === id)
         if (index > -1) {
@@ -107,13 +101,7 @@ export const useProjectStore = defineStore('project', {
           this.audioFiles = this.audioFiles.filter(f => f.projectId !== id)
           const audioFileIds = this.audioFiles.map(f => f.id)
           this.annotations = this.annotations.filter(a => audioFileIds.includes(a.audioFileId))
-          
-          await Promise.all([
-            storage.saveProjects(this.projects),
-            storage.saveAudioFiles(this.audioFiles),
-            storage.saveAnnotations(this.annotations)
-          ])
-
+          await this.saveAll()
           if (this.currentProject?.id === id) {
             this.currentProject = null
           }
@@ -130,10 +118,9 @@ export const useProjectStore = defineStore('project', {
     async addAudioFile(audioFile: AudioFile) {
       this.loading = true
       this.error = null
-
       try {
         this.audioFiles.push(audioFile)
-        await storage.saveAudioFiles(this.audioFiles)
+        await this.saveAll()
         return audioFile
       } catch (error) {
         console.error('Failed to add audio file:', error)
@@ -147,15 +134,11 @@ export const useProjectStore = defineStore('project', {
     async updateAudioFile(audioFile: AudioFile) {
       this.loading = true
       this.error = null
-
       try {
         const index = this.audioFiles.findIndex(f => f.id === audioFile.id)
         if (index > -1) {
-          this.audioFiles[index] = {
-            ...audioFile,
-            updatedAt: new Date()
-          }
-          await storage.saveAudioFiles(this.audioFiles)
+          this.audioFiles[index] = audioFile
+          await this.saveAll()
         }
       } catch (error) {
         console.error('Failed to update audio file:', error)
@@ -169,19 +152,13 @@ export const useProjectStore = defineStore('project', {
     async deleteAudioFile(id: string) {
       this.loading = true
       this.error = null
-
       try {
         const index = this.audioFiles.findIndex(f => f.id === id)
         if (index > -1) {
           this.audioFiles.splice(index, 1)
           // 删除相关的标注
           this.annotations = this.annotations.filter(a => a.audioFileId !== id)
-          
-          await Promise.all([
-            storage.saveAudioFiles(this.audioFiles),
-            storage.saveAnnotations(this.annotations)
-          ])
-
+          await this.saveAll()
           if (this.currentAudioFile?.id === id) {
             this.currentAudioFile = null
           }
@@ -198,23 +175,17 @@ export const useProjectStore = defineStore('project', {
     async updateAnnotation(annotation: Annotation) {
       this.loading = true
       this.error = null
-
       try {
         const index = this.annotations.findIndex(a => a.id === annotation.id)
         if (index > -1) {
-          this.annotations[index] = {
-            ...annotation,
-            updatedAt: new Date()
-          }
+          this.annotations[index] = annotation
         } else {
           this.annotations.push({
             ...annotation,
-            id: crypto.randomUUID(),
-            createdAt: new Date(),
-            updatedAt: new Date()
+            id: crypto.randomUUID()
           })
         }
-        await storage.saveAnnotations(this.annotations)
+        await this.saveAll()
       } catch (error) {
         console.error('Failed to update annotation:', error)
         this.error = error instanceof Error ? error.message : String(error)
@@ -227,12 +198,11 @@ export const useProjectStore = defineStore('project', {
     async deleteAnnotation(id: string) {
       this.loading = true
       this.error = null
-
       try {
         const index = this.annotations.findIndex(a => a.id === id)
         if (index > -1) {
           this.annotations.splice(index, 1)
-          await storage.saveAnnotations(this.annotations)
+          await this.saveAll()
         }
       } catch (error) {
         console.error('Failed to delete annotation:', error)
@@ -241,14 +211,6 @@ export const useProjectStore = defineStore('project', {
       } finally {
         this.loading = false
       }
-    },
-
-    setCurrentProject(project: Project | null) {
-      this.currentProject = project
-    },
-
-    setCurrentAudioFile(audioFile: AudioFile | null) {
-      this.currentAudioFile = audioFile
     }
   }
 }) 

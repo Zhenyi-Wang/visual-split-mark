@@ -1,25 +1,28 @@
-import { readFile } from 'fs/promises'
-import { join } from 'path'
-
-const DATA_FILE = join(process.cwd(), 'storage/data/projects.json')
+import { readFile } from 'node:fs/promises'
+import type { Project, AudioFile, Annotation } from '~/types/project'
+import { storage } from '~/utils/storage'
 
 export default defineEventHandler(async () => {
   try {
-    const data = await readFile(DATA_FILE, 'utf-8')
-    return JSON.parse(data)
-  } catch (error) {
-    if ((error as any).code === 'ENOENT') {
-      return {
-        projects: [],
-        audioFiles: [],
-        annotations: [],
-        settings: {},
-        version: '1.0.0'
-      }
+    // 分别读取不同类型的数据
+    const [projects, audioFiles, annotations, settings] = await Promise.all([
+      readFile(storage.dataFiles.PROJECTS, 'utf-8').then(JSON.parse).catch(() => []),
+      readFile(storage.dataFiles.AUDIO_FILES, 'utf-8').then(JSON.parse).catch(() => []),
+      readFile(storage.dataFiles.ANNOTATIONS, 'utf-8').then(JSON.parse).catch(() => []),
+      readFile(storage.dataFiles.SETTINGS, 'utf-8').then(JSON.parse).catch(() => ({}))
+    ])
+
+    return {
+      projects,
+      audioFiles,
+      annotations,
+      settings
     }
+  } catch (error) {
+    console.error('Failed to load data:', error)
     throw createError({
       statusCode: 500,
-      message: `Failed to load data: ${error instanceof Error ? error.message : String(error)}`
+      message: error instanceof Error ? error.message : 'Failed to load data'
     })
   }
 }) 
