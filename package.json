@@ -7,11 +7,9 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare && node scripts/setup-ffmpeg.js",
-    "setup-ffmpeg": "node scripts/setup-ffmpeg.js",
-    "backup": "curl -X POST http://localhost:3000/api/backup/create",
-    "backup:list": "curl http://localhost:3000/api/backup/list",
-    "backup:restore": "curl -X POST -H \"Content-Type: application/json\" -d '{\"backupPath\":\"$BACKUP_PATH\"}' http://localhost:3000/api/backup/restore"
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@css-render/vue3-ssr": "^0.15.14",

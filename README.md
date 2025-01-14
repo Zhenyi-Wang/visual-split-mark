@@ -18,7 +18,6 @@
 
 - 数据管理
   - 项目管理
-  - 自动备份
   - 数据导出
 
 ## 技术栈
@@ -48,30 +47,16 @@ yarn build
 
 ## 数据管理
 
-项目数据存储在 `storage` 目录下：
+项目使用JSON文件存储数据，所有数据文件位于 `storage/data` 目录下：
 
-```
-storage/
-  ├── data/        # 项目数据
-  ├── uploads/     # 原始音频文件（使用随机ID命名）
-  ├── converted/   # 转换后的音频文件（使用随机ID命名）
-  └── backups/     # 数据备份
-```
+- `projects.json`: 存储项目基本信息
+- `audio_files.json`: 存储音频文件信息
+- `annotations.json`: 存储标注数据
+- `settings.json`: 存储应用设置
 
-### 数据备份
-
-提供了以下命令来管理数据：
-
-```bash
-# 创建备份
-yarn backup
-
-# 查看备份列表
-yarn backup:list
-
-# 从备份恢复
-BACKUP_PATH=storage/backups/backup-xxx.json yarn backup:restore
-```
+音频文件存储在以下目录：
+- `storage/uploads`: 存储上传的原始音频文件
+- `storage/converted`: 存储转换后的WAV文件
 
 ## 开发说明
 
@@ -98,7 +83,6 @@ BACKUP_PATH=storage/backups/backup-xxx.json yarn backup:restore
 
 1. 数据管理
    - 数据导入/导出功能
-   - 自动备份调度
    - 数据压缩存储
 
 2. 功能增强
@@ -109,16 +93,3 @@ BACKUP_PATH=storage/backups/backup-xxx.json yarn backup:restore
 ## 许可证
 
 MIT
-
-## 数据存储
-
-项目使用JSON文件存储数据，所有数据文件位于 `storage/data` 目录下：
-
-- `projects.json`: 存储项目基本信息
-- `audio_files.json`: 存储音频文件信息
-- `annotations.json`: 存储标注数据
-- `settings.json`: 存储应用设置
-
-音频文件存储在以下目录：
-- `storage/uploads`: 存储上传的原始音频文件
-- `storage/converted`: 存储转换后的WAV文件
