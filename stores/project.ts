@@ -14,7 +14,7 @@ export const useProjectStore = defineStore('project', {
   }),
 
   actions: {
-    async loadAll() {
+    async initialize() {
       this.loading = true
       this.error = null
       try {
@@ -39,8 +39,7 @@ export const useProjectStore = defineStore('project', {
           projects: this.projects,
           audioFiles: this.audioFiles,
           annotations: this.annotations,
-          settings: {},
-          version: '1.0.0'
+          settings: {}
         })
       } catch (error) {
         console.error('Failed to save data:', error)
