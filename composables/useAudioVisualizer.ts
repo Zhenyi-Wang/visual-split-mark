@@ -13,35 +13,25 @@ import {
   TIME_AXIS_WIDTH,
   WAVEFORM_WIDTH,
   HANDLE_SIZE,
-  HANDLE_VISUAL_SIZE,
   BUTTON_SIZE,
   BUTTON_PADDING,
   BUTTON_GAP,
-  DEFAULT_PIXELS_PER_SECOND,
-  MIN_PLAYBACK_RATE,
-  MAX_PLAYBACK_RATE,
-  COLORS
+  DEFAULT_PIXELS_PER_SECOND
 } from '~/constants/visualizer'
-import {
-  formatTimeAxis,
-  getTimeFromY,
-  getYFromTime,
-  formatPlayTime
-} from '~/utils/timeFormat'
+import { getTimeFromY } from '~/utils/timeFormat'
 import { useAudioPlayer } from './useAudioPlayer'
+import { useWaveformDrawer } from './useWaveformDrawer'
 
 export function useAudioVisualizer() {
   const audioPlayer = useAudioPlayer()
+  const waveformDrawer = useWaveformDrawer()
   const pixelsPerSecond = ref(DEFAULT_PIXELS_PER_SECOND)
   let animationFrame: number | null = null
-  let canvasCtx: CanvasRenderingContext2D | null = null
-  let canvas: HTMLCanvasElement | null = null
-  let channelData: Float32Array | null = null
   const isDragging = ref(false)
   const selectionStart = ref<number | null>(null)
   const selectionEnd = ref<number | null>(null)
   const selectedRegion = ref<{ start: number; end: number } | null>(null)
-  const regions = ref<Map<string, { start: number; end: number; text?: string }>>(new Map())
+  const regions = ref<Map<string, Region>>(new Map())
   const hoveredRegion = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
   const onRegionClick = ref<RegionClickHandler | null>(null)
   const isDraggingAnnotation = ref(false)
@@ -59,401 +49,6 @@ export function useAudioVisualizer() {
   const onEditButtonClick = ref<ButtonClickHandler | null>(null)
   const onDeleteButtonClick = ref<ButtonClickHandler | null>(null)
 
-  // 绘制圆形按钮的辅助函数
-  const drawCircleButton = (x: number, y: number, size: number, color: string, icon: 'add' | 'edit' | 'delete') => {
-    if (!canvasCtx) return
-
-    // 绘制按钮背景
-    const centerX = x + size/2
-    const centerY = y + size/2
-    canvasCtx.fillStyle = color
-    canvasCtx.beginPath()
-    canvasCtx.arc(centerX, centerY, size/2, 0, Math.PI * 2)
-    canvasCtx.fill()
-
-    // 绘制图标
-    canvasCtx.strokeStyle = '#fff'
-    canvasCtx.lineWidth = 2
-    canvasCtx.beginPath()
-
-    const iconSize = size * 0.4 // 图标大小为按钮的 40%
-
-    if (icon === 'add') {
-      // 绘制加号
-      canvasCtx.moveTo(centerX - iconSize/2, centerY)
-      canvasCtx.lineTo(centerX + iconSize/2, centerY)
-      canvasCtx.moveTo(centerX, centerY - iconSize/2)
-      canvasCtx.lineTo(centerX, centerY + iconSize/2)
-    } else if (icon === 'edit') {
-      // 绘制编辑图标（铅笔）
-      canvasCtx.moveTo(centerX - iconSize/2, centerY + iconSize/2)
-      canvasCtx.lineTo(centerX + iconSize/2, centerY - iconSize/2)
-      canvasCtx.moveTo(centerX - iconSize/2, centerY + iconSize/2)
-      canvasCtx.lineTo(centerX - iconSize/3, centerY + iconSize/2)
-    } else if (icon === 'delete') {
-      // 绘制删除图标（X）
-      canvasCtx.moveTo(centerX - iconSize/2, centerY - iconSize/2)
-      canvasCtx.lineTo(centerX + iconSize/2, centerY + iconSize/2)
-      canvasCtx.moveTo(centerX + iconSize/2, centerY - iconSize/2)
-      canvasCtx.lineTo(centerX - iconSize/2, centerY + iconSize/2)
-    }
-    canvasCtx.stroke()
-  }
-
-  const drawWaveform = () => {
-    if (!canvasCtx || !canvas || !channelData || !audioPlayer.duration.value) return
-
-    // 根据缩放比例计算总高度
-    const totalHeight = audioPlayer.duration.value * pixelsPerSecond.value + PADDING * 2
-    
-    // 同时设置 Canvas 的实际像素高度和 CSS 样式高度
-    canvas.height = totalHeight
-    canvas.style.height = `${totalHeight}px`
-
-    const annotationWidth = canvas.width - TIME_AXIS_WIDTH - WAVEFORM_WIDTH // 标注区域宽度
-
-    // 清除画布
-    canvasCtx.fillStyle = '#fff'
-    canvasCtx.fillRect(0, 0, canvas.width, canvas.height)
-
-    // 绘制时间轴背景
-    canvasCtx.fillStyle = COLORS.timeAxis.background
-    canvasCtx.fillRect(0, 0, TIME_AXIS_WIDTH, canvas.height)
-
-    // 绘制波形区域背景
-    canvasCtx.fillStyle = '#fff'
-    canvasCtx.fillRect(TIME_AXIS_WIDTH, 0, WAVEFORM_WIDTH, canvas.height)
-
-    // 绘制标注区域背景
-    canvasCtx.fillStyle = '#fff'
-    canvasCtx.fillRect(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, 0, annotationWidth, canvas.height)
-
-    // 绘制分隔线
-    canvasCtx.beginPath()
-    canvasCtx.strokeStyle = '#ccc'
-    canvasCtx.lineWidth = 1
-    // 时间轴分隔线
-    canvasCtx.moveTo(TIME_AXIS_WIDTH, 0)
-    canvasCtx.lineTo(TIME_AXIS_WIDTH, canvas.height)
-    // 波形区域分隔线
-    canvasCtx.moveTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, 0)
-    canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, canvas.height)
-    canvasCtx.stroke()
-
-    const barWidth = 1
-    const barGap = 1
-    const totalBars = Math.floor((totalHeight - PADDING * 2) / (barWidth + barGap))
-    const samplesPerBar = Math.floor(channelData.length / totalBars)
-
-    // 计算时间间隔
-    const pixelsPerMinute = pixelsPerSecond.value * 60
-    const minuteHeight = pixelsPerMinute // 每分钟的像素高度
-    const totalMinutes = Math.ceil(audioPlayer.duration.value / 60)
-    
-    // 根据缩放级别选择合适的时间间隔（秒）
-    let timeInterval = 30 // 默认30秒
-    let minorInterval = 5 // 次要刻度的间隔（秒）
-    if (pixelsPerSecond.value >= 30) {
-      timeInterval = 1 // 1秒
-      minorInterval = 0.2 // 0.2秒
-    }
-    else if (pixelsPerSecond.value >= 15) {
-      timeInterval = 2 // 2秒
-      minorInterval = 0.5 // 0.5秒
-    }
-    else if (pixelsPerSecond.value >= 10) {
-      timeInterval = 5 // 5秒
-      minorInterval = 1 // 1秒
-    }
-    else if (pixelsPerSecond.value >= 5) {
-      timeInterval = 10 // 10秒
-      minorInterval = 2 // 2秒
-    }
-    else if (pixelsPerSecond.value >= 2) {
-      timeInterval = 15 // 15秒
-      minorInterval = 3 // 3秒
-    }
-    else if (pixelsPerMinute >= 60) {
-      timeInterval = 30 // 30秒
-      minorInterval = 5 // 5秒
-    }
-    else if (pixelsPerMinute >= 30) {
-      timeInterval = 60 // 1分钟
-      minorInterval = 10 // 10秒
-    }
-    else if (pixelsPerMinute >= 15) {
-      timeInterval = 300 // 5分钟
-      minorInterval = 60 // 1分钟
-    }
-    else if (pixelsPerMinute >= 8) {
-      timeInterval = 600 // 10分钟
-      minorInterval = 120 // 2分钟
-    }
-    else {
-      timeInterval = 1800 // 30分钟
-      minorInterval = 300 // 5分钟
-    }
-
-    // 绘制时间刻度和文本
-    canvasCtx.beginPath()
-    canvasCtx.strokeStyle = COLORS.timeAxis.line.secondary
-    canvasCtx.fillStyle = COLORS.text.secondary
-    canvasCtx.font = '12px Arial'
-    canvasCtx.textAlign = 'right'
-    canvasCtx.textBaseline = 'middle'
-
-    // 计算总秒数
-    const totalSeconds = Math.ceil(audioPlayer.duration.value)
-    
-    // 先绘制次要刻度
-    canvasCtx.beginPath()
-    canvasCtx.strokeStyle = COLORS.timeAxis.line.secondary
-    canvasCtx.lineWidth = 1
-    for (let second = 0; second <= totalSeconds; second += minorInterval) {
-      const y = getYFromTime(second, canvas!, audioPlayer.duration.value)
-      canvasCtx.moveTo(TIME_AXIS_WIDTH - 4, y)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH, y)
-    }
-    canvasCtx.stroke()
-
-    // 绘制主要刻度和文本
-    canvasCtx.beginPath()
-    canvasCtx.strokeStyle = COLORS.timeAxis.line.primary
-    canvasCtx.lineWidth = 1.5
-    canvasCtx.fillStyle = COLORS.text.primary
-    canvasCtx.font = '12px Arial'
-    canvasCtx.textAlign = 'right'
-    canvasCtx.textBaseline = 'middle'
-
-    for (let second = 0; second <= totalSeconds; second += timeInterval) {
-      const y = getYFromTime(second, canvas!, audioPlayer.duration.value)
-      
-      // 根据时间间隔决定刻度线长度
-      const isMainTick = second % 60 === 0 // 整分钟为主刻度
-      const tickLength = isMainTick ? 12 : 8
-      
-      // 绘制刻度线
-      canvasCtx.moveTo(TIME_AXIS_WIDTH - tickLength, y)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH, y)
-      
-      // 绘制时间文本
-      if (isMainTick || timeInterval < 60) {
-        const timeText = formatTimeAxis(second)
-        canvasCtx.fillText(timeText, TIME_AXIS_WIDTH - (tickLength + 8), y)
-      }
-    }
-    canvasCtx.stroke()
-
-    // 修改波形绘制范围
-    canvasCtx.fillStyle = COLORS.waveform
-    for (let i = 0; i < totalBars; i++) {
-      const startSample = i * samplesPerBar
-      const endSample = startSample + samplesPerBar
-      let max = 0
-
-      for (let j = startSample; j < endSample; j++) {
-        const amplitude = Math.abs(channelData[j])
-        if (amplitude > max) {
-          max = amplitude
-        }
-      }
-
-      const barHeight = max * WAVEFORM_WIDTH * 0.8
-      const x = TIME_AXIS_WIDTH + (WAVEFORM_WIDTH - barHeight) / 2
-      const y = i * (barWidth + barGap) + PADDING
-
-      canvasCtx.fillRect(x, y, barHeight, barWidth)
-    }
-
-    // 修改进度线范围
-    if (audioPlayer.audioElement.value) {
-      const progress = audioPlayer.audioElement.value.currentTime / audioPlayer.duration.value
-      const progressY = getYFromTime(audioPlayer.audioElement.value.currentTime, canvas!, audioPlayer.duration.value)
-
-      canvasCtx.beginPath()
-      canvasCtx.strokeStyle = COLORS.progress
-      canvasCtx.lineWidth = 2
-      canvasCtx.moveTo(TIME_AXIS_WIDTH, progressY)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, progressY)
-      canvasCtx.stroke()
-    }
-
-    // 修改标注区域绘制
-    regions.value.forEach((region, id) => {
-      const startY = getYFromTime(region.start, canvas!, audioPlayer.duration.value)
-      const endY = getYFromTime(region.end, canvas!, audioPlayer.duration.value)
-      const isHovered = hoveredRegion.value?.id === id
-
-      // 绘制波形区域的标注背景
-      canvasCtx!.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
-      canvasCtx!.fillRect(TIME_AXIS_WIDTH, Math.min(startY, endY), WAVEFORM_WIDTH, Math.abs(endY - startY))
-
-      // 如果是当前选中的标注，绘制编辑和删除按钮
-      if (isHovered && canvas && canvasCtx) {
-        const buttonY = Math.min(startY, endY) + BUTTON_PADDING
-
-        // 绘制删除按钮（在最右边）
-        const deleteButtonX = canvas.width - BUTTON_SIZE - BUTTON_PADDING
-        drawCircleButton(deleteButtonX, buttonY, BUTTON_SIZE, COLORS.button.delete, 'delete')
-        
-        // 计算删除按钮的点击判定区域
-        deleteButtonBounds.value = {
-          x: deleteButtonX,
-          y: buttonY,
-          width: BUTTON_SIZE,
-          height: BUTTON_SIZE
-        }
-
-        // 绘制编辑按钮（在删除按钮左边）
-        const editButtonX = deleteButtonX - BUTTON_SIZE - BUTTON_GAP
-        drawCircleButton(editButtonX, buttonY, BUTTON_SIZE, COLORS.button.edit, 'edit')
-        
-        // 计算编辑按钮的点击判定区域
-        editButtonBounds.value = {
-          x: editButtonX,
-          y: buttonY,
-          width: BUTTON_SIZE,
-          height: BUTTON_SIZE
-        }
-      }
-
-      // 绘制波形区域的标注边界线
-      canvasCtx!.beginPath()
-      canvasCtx!.strokeStyle = isHovered ? COLORS.region.border.hover : COLORS.region.border.normal
-      canvasCtx!.lineWidth = isHovered ? 2 : 1
-      canvasCtx!.moveTo(TIME_AXIS_WIDTH, startY)
-      canvasCtx!.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, startY)
-      canvasCtx!.moveTo(TIME_AXIS_WIDTH, endY)
-      canvasCtx!.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, endY)
-      canvasCtx!.stroke()
-
-      // 在标注区域绘制文本
-      const text = region.text || ''
-      canvasCtx!.font = '14px Arial'
-      canvasCtx!.textBaseline = 'top'
-      
-      // 计算文本显示位置
-      const textY = Math.min(startY, endY)
-      const textX = TIME_AXIS_WIDTH + WAVEFORM_WIDTH + 16 // 标注区域左边距
-      
-      // 绘制标注区域的背景
-      canvasCtx!.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
-      canvasCtx!.fillRect(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, Math.min(startY, endY), annotationWidth, Math.abs(endY - startY))
-
-      // 绘制文本
-      canvasCtx!.fillStyle = COLORS.text.primary
-      canvasCtx!.textAlign = 'left'
-      
-      // 文本换行处理
-      const maxWidth = annotationWidth - 32 // 左右各留16px边距
-      const words = text.split('')
-      let line = ''
-      let lines: string[] = []
-      
-      for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n]
-        const metrics = canvasCtx!.measureText(testLine)
-        if (metrics.width > maxWidth && n > 0) {
-          lines.push(line)
-          line = words[n]
-        } else {
-          line = testLine
-        }
-      }
-      lines.push(line)
-
-      // 绘制多行文本
-      const lineHeight = 20
-      const startTextY = textY + 8 // 添加 8px 的上边距
-      
-      lines.forEach((line, index) => {
-        canvasCtx!.fillText(line, textX, startTextY + index * lineHeight)
-      })
-    })
-
-    // 修改选区绘制范围
-    if (selectionStart.value !== null && selectionEnd.value !== null) {
-      const startY = getYFromTime(selectionStart.value, canvas!, audioPlayer.duration.value)
-      const endY = getYFromTime(selectionEnd.value, canvas!, audioPlayer.duration.value)
-
-      canvasCtx.fillStyle = COLORS.selection.fill
-      canvasCtx.fillRect(TIME_AXIS_WIDTH, Math.min(startY, endY), WAVEFORM_WIDTH, Math.abs(endY - startY))
-
-      canvasCtx.beginPath()
-      canvasCtx.strokeStyle = COLORS.selection.border
-      canvasCtx.lineWidth = 2
-      canvasCtx.moveTo(TIME_AXIS_WIDTH, startY)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, startY)
-      canvasCtx.moveTo(TIME_AXIS_WIDTH, endY)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, endY)
-      canvasCtx.stroke()
-
-      // 绘制添加按钮
-      const buttonX = TIME_AXIS_WIDTH + WAVEFORM_WIDTH - BUTTON_SIZE - BUTTON_PADDING
-      const buttonY = Math.min(startY, endY) + BUTTON_PADDING
-      
-      drawCircleButton(buttonX, buttonY, BUTTON_SIZE, COLORS.button.add, 'add')
-
-      // 存储按钮区域信息，用于点击检测
-      addButtonBounds.value = {
-        x: buttonX,
-        y: buttonY,
-        width: BUTTON_SIZE,
-        height: BUTTON_SIZE
-      }
-    } else {
-      addButtonBounds.value = null
-    }
-  }
-
-  // 格式化时间轴显示
-  const formatTimeAxis = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    const hours = Math.floor(minutes / 60)
-    
-    if (hours > 0) {
-      return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
-    }
-    // 当时间间隔小于1分钟时，显示秒
-    if (remainingSeconds > 0) {
-      return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
-    }
-    return `${minutes}:00`
-  }
-
-  // 检查点击位置是否在标注区域内
-  const findRegionAtPosition = (y: number, x: number): RegionInfo | null => {
-    if (!canvas || !audioPlayer.duration.value) return null
-    
-    // 排除时间轴区域的点击
-    if (y < PADDING || y > canvas.height - PADDING) return null
-    
-    // 计算时间点
-    const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
-    if (time === null) return null
-
-    // 查找包含该时间点的区域
-    for (const [id, region] of regions.value.entries()) {
-      const startY = getYFromTime(region.start, canvas!, audioPlayer.duration.value)
-      const endY = getYFromTime(region.end, canvas!, audioPlayer.duration.value)
-      
-      // 检查是否点击了手柄
-      if (Math.abs(y - startY) <= HANDLE_SIZE) {
-        return { id, isHandle: 'start', isTextArea: false }
-      }
-      if (Math.abs(y - endY) <= HANDLE_SIZE) {
-        return { id, isHandle: 'end', isTextArea: false }
-      }
-      
-      // 检查是否在区域内
-      if (time >= region.start && time <= region.end) {
-        return { id, isHandle: null, isTextArea: false }
-      }
-    }
-    return null
-  }
-
   const initialize = async (
     container: HTMLElement, 
     audioFile: AudioFile, 
@@ -461,47 +56,57 @@ export function useAudioVisualizer() {
     onAnnotationChangeHandler?: AnnotationChangeHandler
   ) => {
     // 初始化音频播放器
-    channelData = await audioPlayer.initialize(audioFile)
+    const channelData = await audioPlayer.initialize(audioFile)
     
-    // 创建 Canvas 元素
-    canvas = document.createElement('canvas')
-    canvas.className = 'vertical-waveform'
-    canvas.style.cssText = `
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: ${audioPlayer.duration.value * pixelsPerSecond.value + PADDING * 2}px;
-      background: #fff;
-      border-radius: 4px;
-    `
-    canvas.width = container.clientWidth
-    canvas.height = audioPlayer.duration.value * pixelsPerSecond.value + PADDING * 2
-    
-    // 添加到容器
-    container.appendChild(canvas)
-    
-    // 获取绘图上下文
-    canvasCtx = canvas.getContext('2d')
-    if (!canvasCtx) {
-      throw new Error('Failed to get canvas context')
-    }
-
-    // 绘制初始波形
-    drawWaveform()
+    // 初始化波形绘制器
+    waveformDrawer.initialize(container)
+    waveformDrawer.setChannelData(channelData)
 
     // 设置回调函数
     onRegionClick.value = onRegionClickHandler || null
     onAnnotationChange.value = onAnnotationChangeHandler || null
 
+    // 添加音频事件监听
+    audioPlayer.audioElement.value?.addEventListener('timeupdate', () => {
+      // 计算当前播放位置对应的 Y 坐标
+      if (!waveformDrawer.canvas.value) return
+      const currentY = (audioPlayer.currentTime.value / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      
+      // 获取容器的可视区域高度
+      const containerHeight = container.clientHeight
+      
+      // 计算滚动位置，使播放位置保持在视图中间
+      const targetScrollTop = currentY - containerHeight / 2
+      
+      // 平滑滚动到目标位置
+      container.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth'
+      })
+      
+      updateDrawing()
+    })
+
+    // 添加窗口大小变化监听
+    const handleResize = () => {
+      if (!waveformDrawer.canvas.value || !container) return
+      waveformDrawer.canvas.value.width = container.clientWidth
+      updateDrawing()
+    }
+    
+    window.addEventListener('resize', handleResize)
+    
+    // 将 handleResize 保存到组件实例上，以便在 destroy 时移除
+    ;(waveformDrawer.canvas.value as any)._resizeHandler = handleResize
+
     // 添加鼠标事件
     let clickStartTime = 0
     const CLICK_THRESHOLD = 200 // 判断点击的时间阈值
 
-    canvas.addEventListener('mousedown', (e) => {
-      if (!canvas) return
+    waveformDrawer.canvas.value?.addEventListener('mousedown', (e) => {
+      if (!waveformDrawer.canvas.value) return
       clickStartTime = Date.now()
-      const rect = canvas.getBoundingClientRect()
+      const rect = waveformDrawer.canvas.value.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
       const x = e.clientX - rect.left
 
@@ -541,13 +146,13 @@ export function useAudioVisualizer() {
       const regionInfo = findRegionAtPosition(y, x)
       if (!regionInfo) {
         // 如果没有点击到任何区域，开始选区
-        const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
+        const time = getTimeFromY(y, waveformDrawer.canvas.value, audioPlayer.duration.value)
         if (time === null) return
         isDragging.value = true
         selectionStart.value = time
         selectionEnd.value = time
         selectedRegion.value = null
-        drawWaveform()
+        updateDrawing()
         return
       }
 
@@ -565,16 +170,16 @@ export function useAudioVisualizer() {
       // 如果点击了标注区域本身，跳转到开始时间
       const region = regions.value.get(regionInfo.id)
       if (region) {
-        seek(region.start)
+        audioPlayer.seek(region.start)
       }
     })
 
-    canvas.addEventListener('mousemove', (e) => {
-      if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
+    waveformDrawer.canvas.value?.addEventListener('mousemove', (e) => {
+      if (!waveformDrawer.canvas.value) return
+      const rect = waveformDrawer.canvas.value.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
       const x = e.clientX - rect.left
-      const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
+      const time = getTimeFromY(y, waveformDrawer.canvas.value, audioPlayer.duration.value)
       if (time === null) return
 
       // 检查是否在按钮上
@@ -586,7 +191,7 @@ export function useAudioVisualizer() {
         if (editButtonBounds.value) {
           const { x: bx, y: by, width: bw, height: bh } = editButtonBounds.value
           if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-            canvas.style.cursor = 'pointer'
+            waveformDrawer.canvas.value.style.cursor = 'pointer'
             isOnButton = true
           }
         }
@@ -595,7 +200,7 @@ export function useAudioVisualizer() {
         if (!isOnButton && deleteButtonBounds.value) {
           const { x: bx, y: by, width: bw, height: bh } = deleteButtonBounds.value
           if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-            canvas.style.cursor = 'pointer'
+            waveformDrawer.canvas.value.style.cursor = 'pointer'
             isOnButton = true
           }
         }
@@ -605,7 +210,7 @@ export function useAudioVisualizer() {
       if (!isOnButton && selectionStart.value !== null && selectionEnd.value !== null && addButtonBounds.value) {
         const { x: bx, y: by, width: bw, height: bh } = addButtonBounds.value
         if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-          canvas.style.cursor = 'pointer'
+          waveformDrawer.canvas.value.style.cursor = 'pointer'
           isOnButton = true
         }
       }
@@ -614,26 +219,26 @@ export function useAudioVisualizer() {
       const isInWaveformArea = x >= TIME_AXIS_WIDTH && x <= TIME_AXIS_WIDTH + WAVEFORM_WIDTH
       if (isInWaveformArea && !isOnButton) {
         if (isDraggingAnnotation.value) {
-          canvas.style.cursor = 'ns-resize'
+          waveformDrawer.canvas.value.style.cursor = 'ns-resize'
         } else {
           // 检查是否在手柄上
           let isOnHandle = false
           for (const [id, region] of regions.value.entries()) {
-            const startY = (region.start / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
-            const endY = (region.end / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
+            const startY = (region.start / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+            const endY = (region.end / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
             
             if (Math.abs(y - startY) <= HANDLE_SIZE || Math.abs(y - endY) <= HANDLE_SIZE) {
-              canvas.style.cursor = 'ns-resize'
+              waveformDrawer.canvas.value.style.cursor = 'ns-resize'
               isOnHandle = true
               break
             }
           }
           if (!isOnHandle) {
-            canvas.style.cursor = 'default'
+            waveformDrawer.canvas.value.style.cursor = 'default'
           }
         }
       } else if (!isOnButton) {
-        canvas.style.cursor = 'default'
+        waveformDrawer.canvas.value.style.cursor = 'default'
       }
 
       // 处理拖动和选区
@@ -646,12 +251,12 @@ export function useAudioVisualizer() {
           newAnnotation.end = Math.max(time, newAnnotation.start)
         }
         editingAnnotation.value = newAnnotation
-        updateRegion(newAnnotation)
-        drawWaveform()
+        regions.value.set(newAnnotation.id, newAnnotation)
+        updateDrawing()
       } else if (isDragging.value) {
         // 更新选区
         selectionEnd.value = time
-        drawWaveform()
+        updateDrawing()
       } else {
         // 处理悬停效果
         let found = false
@@ -665,11 +270,11 @@ export function useAudioVisualizer() {
         if (!found) {
           hoveredRegion.value = null
         }
-        drawWaveform()
+        updateDrawing()
       }
     })
 
-    canvas.addEventListener('mouseup', (e: MouseEvent) => {
+    waveformDrawer.canvas.value?.addEventListener('mouseup', (e: MouseEvent) => {
       if (isDraggingAnnotation.value && editingAnnotation.value) {
         // 在拖拽结束时触发更新回调
         if (onAnnotationChangeHandler) {
@@ -678,12 +283,12 @@ export function useAudioVisualizer() {
       }
       isDraggingAnnotation.value = false
       draggingHandle.value = null
-      if (!canvas || !isDragging.value) return
+      if (!waveformDrawer.canvas.value || !isDragging.value) return
       
       const clickDuration = Date.now() - clickStartTime
-      const rect = canvas.getBoundingClientRect()
+      const rect = waveformDrawer.canvas.value.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
-      const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
+      const time = getTimeFromY(y, waveformDrawer.canvas.value, audioPlayer.duration.value)
       
       isDragging.value = false
       
@@ -692,7 +297,7 @@ export function useAudioVisualizer() {
         selectionStart.value = null
         selectionEnd.value = null
         selectedRegion.value = null
-        seek(time || 0)
+        audioPlayer.seek(time || 0)
       } else if (selectionStart.value !== null && time !== null) {
         // 这是一个拖拽事件
         selectedRegion.value = {
@@ -701,60 +306,144 @@ export function useAudioVisualizer() {
         }
       }
       
-      drawWaveform()
+      updateDrawing()
     })
 
     // 添加鼠标离开事件处理
-    canvas.addEventListener('mouseleave', () => {
-      if (!canvas) return
-      canvas.style.cursor = 'default'
+    waveformDrawer.canvas.value?.addEventListener('mouseleave', () => {
+      if (!waveformDrawer.canvas.value) return
+      waveformDrawer.canvas.value.style.cursor = 'default'
       hoveredRegion.value = null
       if (isDragging.value) {
         isDragging.value = false
       }
-      drawWaveform()
-    })
-    
-    // 添加音频事件监听
-    audioPlayer.audioElement.value?.addEventListener('timeupdate', () => {
-      // 计算当前播放位置对应的 Y 坐标
-      if (!canvas) return
-      const currentY = (audioPlayer.currentTime.value / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
-      
-      // 获取容器的可视区域高度
-      const containerHeight = container.clientHeight
-      
-      // 计算滚动位置，使播放位置保持在视图中间
-      const targetScrollTop = currentY - containerHeight / 2
-      
-      // 平滑滚动到目标位置
-      container.scrollTo({
-        top: Math.max(0, targetScrollTop),
-        behavior: 'smooth'
-      })
-      
-      drawWaveform()
+      updateDrawing()
     })
 
-    // 添加窗口大小变化监听
-    const handleResize = () => {
-      if (!canvas || !container) return
-      canvas.width = container.clientWidth
-      drawWaveform()
+    // 初始绘制
+    updateDrawing()
+  }
+
+  // 检查点击位置是否在标注区域内
+  const findRegionAtPosition = (y: number, x: number): RegionInfo | null => {
+    if (!waveformDrawer.canvas.value || !audioPlayer.duration.value) return null
+    
+    // 排除时间轴区域的点击
+    if (y < PADDING || y > waveformDrawer.canvas.value.height - PADDING) return null
+    
+    // 计算时间点
+    const time = getTimeFromY(y, waveformDrawer.canvas.value, audioPlayer.duration.value)
+    if (time === null) return null
+
+    // 查找包含该时间点的区域
+    for (const [id, region] of regions.value.entries()) {
+      const startY = (region.start / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      const endY = (region.end / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      
+      // 检查是否点击了手柄
+      if (Math.abs(y - startY) <= HANDLE_SIZE) {
+        return { id, isHandle: 'start', isTextArea: false }
+      }
+      if (Math.abs(y - endY) <= HANDLE_SIZE) {
+        return { id, isHandle: 'end', isTextArea: false }
+      }
+      
+      // 检查是否在区域内
+      if (time >= region.start && time <= region.end) {
+        return { id, isHandle: null, isTextArea: false }
+      }
     }
-    
-    window.addEventListener('resize', handleResize)
-    
-    // 将 handleResize 保存到组件实例上，以便在 destroy 时移除
-    ;(canvas as any)._resizeHandler = handleResize
+    return null
+  }
+
+  // 更新绘制
+  const updateDrawing = () => {
+    if (!waveformDrawer.canvas.value) return
+
+    // 计算按钮边界信息
+    if (hoveredRegion.value) {
+      const startY = (hoveredRegion.value.start / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      const endY = (hoveredRegion.value.end / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      const buttonY = Math.min(startY, endY) + BUTTON_PADDING
+
+      // 删除按钮（在最右边）
+      const deleteButtonX = waveformDrawer.canvas.value.width - BUTTON_SIZE - BUTTON_PADDING
+      deleteButtonBounds.value = {
+        x: deleteButtonX,
+        y: buttonY,
+        width: BUTTON_SIZE,
+        height: BUTTON_SIZE
+      }
+
+      // 编辑按钮（在删除按钮左边）
+      const editButtonX = deleteButtonX - BUTTON_SIZE - BUTTON_GAP
+      editButtonBounds.value = {
+        x: editButtonX,
+        y: buttonY,
+        width: BUTTON_SIZE,
+        height: BUTTON_SIZE
+      }
+    } else {
+      deleteButtonBounds.value = null
+      editButtonBounds.value = null
+    }
+
+    // 计算添加按钮边界
+    if (selectionStart.value !== null && selectionEnd.value !== null) {
+      const startY = (selectionStart.value / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      const endY = (selectionEnd.value / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
+      const buttonX = TIME_AXIS_WIDTH + WAVEFORM_WIDTH - BUTTON_SIZE - BUTTON_PADDING
+      const buttonY = Math.min(startY, endY) + BUTTON_PADDING
+
+      addButtonBounds.value = {
+        x: buttonX,
+        y: buttonY,
+        width: BUTTON_SIZE,
+        height: BUTTON_SIZE
+      }
+    } else {
+      addButtonBounds.value = null
+    }
+
+    // 准备按钮边界信息
+    const buttonBounds = {
+      add: addButtonBounds.value,
+      edit: editButtonBounds.value,
+      delete: deleteButtonBounds.value
+    }
+
+    // 准备选区信息
+    const selectionRange = selectionStart.value !== null && selectionEnd.value !== null
+      ? { start: selectionStart.value, end: selectionEnd.value }
+      : null
+
+    // 调用波形绘制器的绘制方法
+    waveformDrawer.drawWaveform(
+      audioPlayer.duration.value,
+      audioPlayer.currentTime.value,
+      pixelsPerSecond.value,
+      regions.value,
+      hoveredRegion.value,
+      selectionRange,
+      editingAnnotation.value,
+      buttonBounds
+    )
+  }
+
+  const destroy = () => {
+    if (animationFrame) {
+      cancelAnimationFrame(animationFrame)
+    }
+    audioPlayer.destroy()
+    waveformDrawer.destroy()
+    if (waveformDrawer.canvas.value) {
+      window.removeEventListener('resize', (waveformDrawer.canvas.value as any)._resizeHandler)
+    }
   }
 
   const setZoom = (value: number) => {
-    const minZoom = 1 // 最小缩放为 1px/s
-    pixelsPerSecond.value = Math.max(minZoom, Math.min(500, value))
-    if (canvas) {
-      drawWaveform()
-    }
+    pixelsPerSecond.value = Math.max(1, Math.min(500, value))
+    updateDrawing()
   }
 
   const zoomIn = () => {
@@ -765,182 +454,25 @@ export function useAudioVisualizer() {
     setZoom(pixelsPerSecond.value / 1.2)
   }
 
-  const destroy = () => {
-    if (animationFrame) {
-      cancelAnimationFrame(animationFrame)
-    }
-    audioPlayer.destroy()
-    if (canvas) {
-      // 移除 resize 事件监听
-      window.removeEventListener('resize', (canvas as any)._resizeHandler)
-      canvas.remove()
-      canvas = null
-    }
-    canvasCtx = null
-    channelData = null
+  // 区域管理方法
+  const addRegion = (annotation: Region & { id: string }) => {
+    regions.value.set(annotation.id, annotation)
+    updateDrawing()
   }
 
-  const playPause = async () => {
-    if (!audioPlayer.audioElement.value || !audioPlayer.audioContext.value) return
-
-    // 如果音频上下文被挂起，则恢复
-    if (audioPlayer.audioContext.value.state === 'suspended') {
-      await audioPlayer.audioContext.value.resume()
-    }
-
-    if (audioPlayer.isPlaying.value) {
-      audioPlayer.audioElement.value.pause()
-    } else {
-      await audioPlayer.audioElement.value.play()
-    }
+  const updateRegion = (annotation: Region & { id: string }) => {
+    regions.value.set(annotation.id, annotation)
+    updateDrawing()
   }
 
-  const seek = (time: number) => {
-    if (!audioPlayer.audioElement.value) return
-    audioPlayer.audioElement.value.currentTime = Math.max(0, Math.min(time, audioPlayer.duration.value))
-  }
-
-  // 绘制选中区域
-  const drawSelection = () => {
-    if (!canvasCtx || !canvas || !selectionStart.value || !selectionEnd.value) return
-
-    const timeAxisWidth = 50
-    const padding = 30
-    const startY = (selectionStart.value / audioPlayer.duration.value) * (canvas.height - padding * 2) + padding
-    const endY = (selectionEnd.value / audioPlayer.duration.value) * (canvas.height - padding * 2) + padding
-
-    // 绘制半透明遮罩
-    canvasCtx.fillStyle = 'rgba(74, 158, 255, 0.2)'
-    canvasCtx.fillRect(timeAxisWidth, Math.min(startY, endY), canvas.width - timeAxisWidth, Math.abs(endY - startY))
-
-    // 绘制边界线
-    canvasCtx.beginPath()
-    canvasCtx.strokeStyle = '#4a9eff'
-    canvasCtx.lineWidth = 2
-    canvasCtx.moveTo(timeAxisWidth, startY)
-    canvasCtx.lineTo(canvas.width, startY)
-    canvasCtx.moveTo(timeAxisWidth, endY)
-    canvasCtx.lineTo(canvas.width, endY)
-    canvasCtx.stroke()
-  }
-
-  // 添加标注区域
-  const addRegion = (annotation: { id: string; start: number; end: number; text?: string }) => {
-    regions.value.set(annotation.id, {
-      start: annotation.start,
-      end: annotation.end,
-      text: annotation.text
-    })
-    drawWaveform()
-  }
-
-  // 更新标注区域
-  const updateRegion = (annotation: { id: string; start: number; end: number; text?: string }) => {
-    regions.value.set(annotation.id, {
-      start: annotation.start,
-      end: annotation.end,
-      text: annotation.text
-    })
-    drawWaveform()
-  }
-
-  // 删除标注区域
   const removeRegion = (id: string) => {
     regions.value.delete(id)
-    drawWaveform()
+    updateDrawing()
   }
 
-  // 绘制所有标注区域
-  const drawRegions = () => {
-    if (!canvasCtx || !canvas) return
-
-    regions.value.forEach((region, id) => {
-      if (!canvasCtx || !canvas) return
-
-      const startY = (region.start / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
-      const endY = (region.end / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
-      const isEditing = editingAnnotation.value?.id === id
-      const isHovered = hoveredRegion.value?.id === id
-
-      // 绘制波形区域的标注背景
-      canvasCtx.fillStyle = isEditing ? 'rgba(255, 182, 193, 0.4)' : (isHovered ? 'rgba(255, 182, 193, 0.3)' : 'rgba(255, 182, 193, 0.2)')
-      canvasCtx.fillRect(TIME_AXIS_WIDTH, Math.min(startY, endY), WAVEFORM_WIDTH, Math.abs(endY - startY))
-
-      // 绘制波形区域的标注边界线
-      canvasCtx.beginPath()
-      canvasCtx.strokeStyle = isEditing ? '#ff1493' : (isHovered ? '#ff69b4' : '#ffb6c1')
-      canvasCtx.lineWidth = isEditing ? 2 : 1
-
-      // 绘制开始和结束线
-      canvasCtx.moveTo(TIME_AXIS_WIDTH, startY)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, startY)
-      canvasCtx.moveTo(TIME_AXIS_WIDTH, endY)
-      canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, endY)
-      canvasCtx.stroke()
-
-      // 绘制拖拽手柄
-      if (isEditing || isHovered) {
-        canvasCtx.fillStyle = '#ff1493'
-        // 开始时间手柄
-        canvasCtx.beginPath()
-        canvasCtx.arc(TIME_AXIS_WIDTH + WAVEFORM_WIDTH / 2, startY, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
-        canvasCtx.fill()
-        // 结束时间手柄
-        canvasCtx.beginPath()
-        canvasCtx.arc(TIME_AXIS_WIDTH + WAVEFORM_WIDTH / 2, endY, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
-        canvasCtx.fill()
-      }
-
-      // 绘制标注文本背景
-      const text = region.text || ''
-      canvasCtx.font = '14px Arial'
-      canvasCtx.textBaseline = 'middle'
-      
-      // 计算文本显示位置
-      const textY = (startY + endY) / 2
-      const textX = TIME_AXIS_WIDTH + WAVEFORM_WIDTH + 16 // 标注区域左边距
-      
-      // 绘制文本背景
-      canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.9)'
-      const textMetrics = canvasCtx.measureText(text)
-      const textHeight = 24
-      const textWidth = Math.min(textMetrics.width + WAVEFORM_WIDTH + 16, WAVEFORM_WIDTH)
-      canvasCtx.fillRect(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, Math.min(startY, endY), textWidth, textHeight)
-
-      // 绘制文本
-      canvasCtx.fillStyle = '#333'
-      canvasCtx.textAlign = 'left'
-      
-      // 如果文本过长，截断并添加省略号
-      let displayText = text
-      if (textMetrics.width > WAVEFORM_WIDTH - 16) {
-        let tempText = text
-        while (canvasCtx.measureText(tempText + '...').width > WAVEFORM_WIDTH - 16 && tempText.length > 0) {
-          tempText = tempText.slice(0, -1)
-        }
-        displayText = tempText + '...'
-      }
-      
-      canvasCtx.fillText(displayText, TIME_AXIS_WIDTH + WAVEFORM_WIDTH + 16, textY)
-    })
-  }
-
-  // 添加清除所有标注的方法
   const clearRegions = () => {
     regions.value.clear()
-    drawWaveform()
-  }
-
-  const setPlaybackRate = (rate: number) => {
-    if (!audioPlayer.audioElement.value) return
-    // 限制倍速范围在 0.5-5 倍之间
-    const newRate = Math.max(0.5, Math.min(5, rate))
-    audioPlayer.playbackRate.value = newRate
-    audioPlayer.audioElement.value.playbackRate = newRate
-  }
-
-  const getPlaybackRate = () => {
-    return audioPlayer.playbackRate.value
+    updateDrawing()
   }
 
   return {
