@@ -550,6 +550,11 @@
   resolved "https://registry.npmmirror.com/@ffmpeg/util/-/util-0.12.2.tgz#6bab9d8022a5bed9a6ff0933e5235b9b38698599"
   integrity sha512-ouyoW+4JB7WxjeZ2y6KpRvB+dLp7Cp4ro8z0HIVpZVCM7AwFlHa0c4R8Y/a4M3wMqATpYKhC7lSFHQ0T11MEDw==
 
+"@icon-park/vue-next@^1.4.2":
+  version "1.4.2"
+  resolved "https://registry.yarnpkg.com/@icon-park/vue-next/-/vue-next-1.4.2.tgz#818c048100401620e8112beb2636f10171b195cc"
+  integrity sha512-+QklF255wkfBOabY+xw6FAI0Bwln/RhdwCunNy/9sKdKuChtaU67QZqU67KGAvZUTeeBgsL+yaHHxqfQeGZXEQ==
+
 "@ioredis/commands@^1.1.1":
   version "1.2.0"
   resolved "https://registry.npmmirror.com/@ioredis/commands/-/commands-1.2.0.tgz#6d61b3097470af1fdbbe622795b8921d42018e11"
@@ -1277,6 +1282,16 @@
     node-gyp-build "^4.2.2"
     picomatch "^4.0.2"
     resolve-from "^5.0.0"
+
+"@vicons/carbon@^0.13.0":
+  version "0.13.0"
+  resolved "https://registry.yarnpkg.com/@vicons/carbon/-/carbon-0.13.0.tgz#a8fbbbbd4c3f51c8b0b00b268369ef6be2df9bd8"
+  integrity sha512-Z/jExyyS4gsXJc66oTqV/j98nsaiX2JlQ0IUwu9Ms3rztf8VOHEQRuX8Jey1/zbxJpFY/tU+bWvKPRFYGIvCWQ==
+
+"@vicons/ionicons5@^0.13.0":
+  version "0.13.0"
+  resolved "https://registry.yarnpkg.com/@vicons/ionicons5/-/ionicons5-0.13.0.tgz#86856b21807f9e2340c31e7b596f7f42567a88b1"
+  integrity sha512-zvZKBPjEXKN7AXNo2Na2uy+nvuv6SP4KAMQxpKL2vfHMj0fSvuw7JZcOPCjQC3e7ayssKnaoFVAhbYcW6v41qQ==
 
 "@vitejs/plugin-vue-jsx@^4.1.1":
   version "4.1.1"
@@ -5078,11 +5093,6 @@ vueuc@^0.4.63:
     seemly "^0.3.6"
     vdirs "^0.1.4"
     vooks "^0.2.4"
-
-wavesurfer.js@^7.8.16:
-  version "7.8.16"
-  resolved "https://registry.npmmirror.com/wavesurfer.js/-/wavesurfer.js-7.8.16.tgz#9309f824e851f0cd812d3dd1982389b124cd29da"
-  integrity sha512-lhQF42A4Wn7ug5bixaqGK53qWF2minWdXlzxPtLV+QoVH3WgvVSdsP2HBaHRbkfT2Lh67kJG6CquFdukmf95gg==
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

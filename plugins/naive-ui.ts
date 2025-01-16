@@ -4,6 +4,8 @@ import type { NuxtSSRContext } from '#app'
 import {
   create,
   NButton,
+  NButtonGroup,
+  NDivider,
   NLayout,
   NLayoutHeader,
   NLayoutContent,
@@ -17,6 +19,7 @@ import {
   NSpace,
   NCard,
   NEmpty,
+  NIcon,
   NList,
   NListItem,
   NThing,
@@ -32,10 +35,15 @@ import {
   NTag
 } from 'naive-ui'
 
+// 导入图标组件
+import { Play, Pause } from '@vicons/carbon'
+
 export default defineNuxtPlugin((nuxtApp) => {
   const naive = create({
     components: [
       NButton,
+      NButtonGroup,
+      NDivider,
       NLayout,
       NLayoutHeader,
       NLayoutContent,
@@ -49,6 +57,7 @@ export default defineNuxtPlugin((nuxtApp) => {
       NSpace,
       NCard,
       NEmpty,
+      NIcon,
       NList,
       NListItem,
       NThing,
@@ -90,4 +99,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       }
     }
   }
+
+  // 注册图标组件
+  nuxtApp.vueApp.component('n-icon', NIcon)
+  nuxtApp.vueApp.component('icon-play', Play)
+  nuxtApp.vueApp.component('icon-pause', Pause)
 }) 

@@ -13,18 +13,47 @@ export const useProjectStore = defineStore('project', {
     error: null as string | null
   }),
 
+  getters: {
+    projectAudioFiles: (state) => {
+      const currentProject = state.currentProject
+      if (!currentProject) return []
+      return state.audioFiles.filter(f => f.projectId === currentProject.id)
+    },
+
+    audioFileAnnotations: (state) => {
+      const currentAudioFile = state.currentAudioFile
+      if (!currentAudioFile) return []
+      return state.annotations.filter(a => a.audioFileId === currentAudioFile.id)
+    }
+  },
+
   actions: {
     async initialize() {
       this.loading = true
       this.error = null
       try {
         const data = await storage.loadData()
-        this.projects = data.projects
-        this.audioFiles = data.audioFiles
-        this.annotations = data.annotations
+        this.projects = Array.isArray(data.projects) ? data.projects.map(project => ({
+          ...project,
+          createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
+          updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date()
+        })) : []
+        this.audioFiles = Array.isArray(data.audioFiles) ? data.audioFiles.map(file => ({
+          ...file,
+          createdAt: file.createdAt ? new Date(file.createdAt) : new Date(),
+          updatedAt: file.updatedAt ? new Date(file.updatedAt) : new Date()
+        })) : []
+        this.annotations = Array.isArray(data.annotations) ? data.annotations.map(annotation => ({
+          ...annotation,
+          createdAt: annotation.createdAt ? new Date(annotation.createdAt) : new Date(),
+          updatedAt: annotation.updatedAt ? new Date(annotation.updatedAt) : new Date()
+        })) : []
       } catch (error) {
         console.error('Failed to load data:', error)
         this.error = error instanceof Error ? error.message : String(error)
+        this.projects = []
+        this.audioFiles = []
+        this.annotations = []
         throw error
       } finally {
         this.loading = false
@@ -50,6 +79,14 @@ export const useProjectStore = defineStore('project', {
       }
     },
 
+    setCurrentProject(project: Project | null) {
+      this.currentProject = project
+    },
+
+    setCurrentAudioFile(audioFile: AudioFile | null) {
+      this.currentAudioFile = audioFile
+    },
+
     async createProject(name: string, description?: string) {
       this.loading = true
       this.error = null
@@ -57,7 +94,9 @@ export const useProjectStore = defineStore('project', {
         const project: Project = {
           id: crypto.randomUUID(),
           name,
-          description
+          description,
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
         this.projects.push(project)
         await this.saveAll()

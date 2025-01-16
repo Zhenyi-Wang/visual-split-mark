@@ -2,6 +2,8 @@ export interface Project {
   id: string
   name: string
   description?: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface AudioFile {
@@ -12,6 +14,8 @@ export interface AudioFile {
   wavPath: string
   duration: number
   status: 'uploaded' | 'converting' | 'ready' | 'error'
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Annotation {
@@ -21,4 +25,6 @@ export interface Annotation {
   end: number
   text: string
   whisperText?: string
+  createdAt: Date
+  updatedAt: Date
 } 

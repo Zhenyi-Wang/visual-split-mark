@@ -22,16 +22,30 @@ export async function saveBlob(blob: Blob, path: string): Promise<void> {
 }
 
 /**
- * 从指定路径读取 Blob 对象
+ * 从指定路径或 URL 加载 Blob 对象
+ * @param source 可以是本地存储路径或 URL
  */
-export async function loadBlob(path: string): Promise<Blob | null> {
-  // 从 localStorage 中读取文件
-  const base64 = localStorage.getItem(`file:${path}`)
-  if (!base64) return null
+export async function loadBlob(source: string): Promise<Blob | null> {
+  try {
+    // 如果是 URL，直接从网络加载
+    if (source.startsWith('http://') || source.startsWith('https://')) {
+      const response = await fetch(source)
+      if (!response.ok) {
+        throw new Error(`Failed to load blob: ${response.statusText}`)
+      }
+      return response.blob()
+    }
 
-  // 将 base64 转换回 Blob
-  const response = await fetch(base64)
-  return response.blob()
+    // 从服务器加载文件
+    const response = await fetch(`/api/file/load?path=${encodeURIComponent(source)}`)
+    if (!response.ok) {
+      throw new Error(`Failed to load blob: ${response.statusText}`)
+    }
+    return response.blob()
+  } catch (error) {
+    console.error('Failed to load blob:', error)
+    return null
+  }
 }
 
 /**
@@ -49,4 +63,4 @@ export function generateFilePath(directory: string, filename: string): string {
   const random = Math.random().toString(36).substring(2, 15)
   const ext = filename.split('.').pop()
   return `${directory}/${timestamp}-${random}.${ext}`
-} 
+}

@@ -21,10 +21,41 @@ export default defineNuxtConfig({
 
   vite: {
     optimizeDeps: {
-      exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
+      exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+      include: [
+        'naive-ui',
+        '@css-render/vue3-ssr',
+        '@vicons/carbon',
+        '@vicons/ionicons5',
+        'pinia',
+        'jszip'
+      ]
     },
     build: {
-      target: 'esnext'
+      target: 'esnext',
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'naive-ui': ['naive-ui']
+          }
+        }
+      }
+    },
+    server: {
+      hmr: {
+        overlay: false
+      }
+    },
+    // 开发模式性能优化
+    define: {
+      __VUE_OPTIONS_API__: false
+    },
+    // 配置缓存
+    cacheDir: 'node_modules/.vite',
+    ssr: {
+      noExternal: ['naive-ui', '@css-render/vue3-ssr']
     }
   },
 
