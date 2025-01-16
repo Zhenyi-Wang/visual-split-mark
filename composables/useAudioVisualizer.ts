@@ -1,6 +1,5 @@
 import { ref } from 'vue'
 import type { AudioFile } from '~/types/project'
-import { loadBlob } from '~/utils/file'
 import type {
   RegionInfo,
   Region,
@@ -29,15 +28,11 @@ import {
   getYFromTime,
   formatPlayTime
 } from '~/utils/timeFormat'
+import { useAudioPlayer } from './useAudioPlayer'
 
 export function useAudioVisualizer() {
-  const audioContext = ref<AudioContext | null>(null)
-  const audioElement = ref<HTMLAudioElement | null>(null)
-  const isPlaying = ref(false)
-  const duration = ref(0)
-  const currentTime = ref(0)
+  const audioPlayer = useAudioPlayer()
   const pixelsPerSecond = ref(DEFAULT_PIXELS_PER_SECOND)
-  const playbackRate = ref(1)
   let animationFrame: number | null = null
   let canvasCtx: CanvasRenderingContext2D | null = null
   let canvas: HTMLCanvasElement | null = null
@@ -106,10 +101,10 @@ export function useAudioVisualizer() {
   }
 
   const drawWaveform = () => {
-    if (!canvasCtx || !canvas || !channelData || !duration.value) return
+    if (!canvasCtx || !canvas || !channelData || !audioPlayer.duration.value) return
 
     // 根据缩放比例计算总高度
-    const totalHeight = duration.value * pixelsPerSecond.value + PADDING * 2
+    const totalHeight = audioPlayer.duration.value * pixelsPerSecond.value + PADDING * 2
     
     // 同时设置 Canvas 的实际像素高度和 CSS 样式高度
     canvas.height = totalHeight
@@ -153,7 +148,7 @@ export function useAudioVisualizer() {
     // 计算时间间隔
     const pixelsPerMinute = pixelsPerSecond.value * 60
     const minuteHeight = pixelsPerMinute // 每分钟的像素高度
-    const totalMinutes = Math.ceil(duration.value / 60)
+    const totalMinutes = Math.ceil(audioPlayer.duration.value / 60)
     
     // 根据缩放级别选择合适的时间间隔（秒）
     let timeInterval = 30 // 默认30秒
@@ -208,14 +203,14 @@ export function useAudioVisualizer() {
     canvasCtx.textBaseline = 'middle'
 
     // 计算总秒数
-    const totalSeconds = Math.ceil(duration.value)
+    const totalSeconds = Math.ceil(audioPlayer.duration.value)
     
     // 先绘制次要刻度
     canvasCtx.beginPath()
     canvasCtx.strokeStyle = COLORS.timeAxis.line.secondary
     canvasCtx.lineWidth = 1
     for (let second = 0; second <= totalSeconds; second += minorInterval) {
-      const y = getYFromTime(second, canvas!, duration.value)
+      const y = getYFromTime(second, canvas!, audioPlayer.duration.value)
       canvasCtx.moveTo(TIME_AXIS_WIDTH - 4, y)
       canvasCtx.lineTo(TIME_AXIS_WIDTH, y)
     }
@@ -231,7 +226,7 @@ export function useAudioVisualizer() {
     canvasCtx.textBaseline = 'middle'
 
     for (let second = 0; second <= totalSeconds; second += timeInterval) {
-      const y = getYFromTime(second, canvas!, duration.value)
+      const y = getYFromTime(second, canvas!, audioPlayer.duration.value)
       
       // 根据时间间隔决定刻度线长度
       const isMainTick = second % 60 === 0 // 整分钟为主刻度
@@ -271,9 +266,9 @@ export function useAudioVisualizer() {
     }
 
     // 修改进度线范围
-    if (audioElement.value) {
-      const progress = audioElement.value.currentTime / duration.value
-      const progressY = getYFromTime(audioElement.value.currentTime, canvas!, duration.value)
+    if (audioPlayer.audioElement.value) {
+      const progress = audioPlayer.audioElement.value.currentTime / audioPlayer.duration.value
+      const progressY = getYFromTime(audioPlayer.audioElement.value.currentTime, canvas!, audioPlayer.duration.value)
 
       canvasCtx.beginPath()
       canvasCtx.strokeStyle = COLORS.progress
@@ -285,8 +280,8 @@ export function useAudioVisualizer() {
 
     // 修改标注区域绘制
     regions.value.forEach((region, id) => {
-      const startY = getYFromTime(region.start, canvas!, duration.value)
-      const endY = getYFromTime(region.end, canvas!, duration.value)
+      const startY = getYFromTime(region.start, canvas!, audioPlayer.duration.value)
+      const endY = getYFromTime(region.end, canvas!, audioPlayer.duration.value)
       const isHovered = hoveredRegion.value?.id === id
 
       // 绘制波形区域的标注背景
@@ -378,8 +373,8 @@ export function useAudioVisualizer() {
 
     // 修改选区绘制范围
     if (selectionStart.value !== null && selectionEnd.value !== null) {
-      const startY = getYFromTime(selectionStart.value, canvas!, duration.value)
-      const endY = getYFromTime(selectionEnd.value, canvas!, duration.value)
+      const startY = getYFromTime(selectionStart.value, canvas!, audioPlayer.duration.value)
+      const endY = getYFromTime(selectionEnd.value, canvas!, audioPlayer.duration.value)
 
       canvasCtx.fillStyle = COLORS.selection.fill
       canvasCtx.fillRect(TIME_AXIS_WIDTH, Math.min(startY, endY), WAVEFORM_WIDTH, Math.abs(endY - startY))
@@ -429,19 +424,19 @@ export function useAudioVisualizer() {
 
   // 检查点击位置是否在标注区域内
   const findRegionAtPosition = (y: number, x: number): RegionInfo | null => {
-    if (!canvas || !duration.value) return null
+    if (!canvas || !audioPlayer.duration.value) return null
     
     // 排除时间轴区域的点击
     if (y < PADDING || y > canvas.height - PADDING) return null
     
     // 计算时间点
-    const time = getTimeFromY(y, canvas!, duration.value)
+    const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
     if (time === null) return null
 
     // 查找包含该时间点的区域
     for (const [id, region] of regions.value.entries()) {
-      const startY = getYFromTime(region.start, canvas!, duration.value)
-      const endY = getYFromTime(region.end, canvas!, duration.value)
+      const startY = getYFromTime(region.start, canvas!, audioPlayer.duration.value)
+      const endY = getYFromTime(region.end, canvas!, audioPlayer.duration.value)
       
       // 检查是否点击了手柄
       if (Math.abs(y - startY) <= HANDLE_SIZE) {
@@ -465,26 +460,8 @@ export function useAudioVisualizer() {
     onRegionClickHandler?: RegionClickHandler,
     onAnnotationChangeHandler?: AnnotationChangeHandler
   ) => {
-    // 创建音频元素
-    audioElement.value = new Audio()
-    audioElement.value.crossOrigin = 'anonymous'
-    
-    // 加载音频文件
-    const blob = await loadBlob(audioFile.wavPath)
-    if (!blob) {
-      throw new Error('Failed to load audio file')
-    }
-    const arrayBuffer = await blob.arrayBuffer()
-    
-    // 创建音频上下文
-    audioContext.value = new AudioContext()
-    
-    // 解码音频数据
-    const audioBuffer = await audioContext.value.decodeAudioData(arrayBuffer)
-    duration.value = audioBuffer.duration
-    
-    // 获取波形数据
-    channelData = audioBuffer.getChannelData(0)
+    // 初始化音频播放器
+    channelData = await audioPlayer.initialize(audioFile)
     
     // 创建 Canvas 元素
     canvas = document.createElement('canvas')
@@ -494,12 +471,12 @@ export function useAudioVisualizer() {
       left: 0;
       top: 0;
       width: 100%;
-      height: ${duration.value * pixelsPerSecond.value + PADDING * 2}px;
+      height: ${audioPlayer.duration.value * pixelsPerSecond.value + PADDING * 2}px;
       background: #fff;
       border-radius: 4px;
     `
     canvas.width = container.clientWidth
-    canvas.height = duration.value * pixelsPerSecond.value + PADDING * 2
+    canvas.height = audioPlayer.duration.value * pixelsPerSecond.value + PADDING * 2
     
     // 添加到容器
     container.appendChild(canvas)
@@ -564,7 +541,7 @@ export function useAudioVisualizer() {
       const regionInfo = findRegionAtPosition(y, x)
       if (!regionInfo) {
         // 如果没有点击到任何区域，开始选区
-        const time = getTimeFromY(y, canvas!, duration.value)
+        const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
         if (time === null) return
         isDragging.value = true
         selectionStart.value = time
@@ -597,7 +574,7 @@ export function useAudioVisualizer() {
       const rect = canvas.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
       const x = e.clientX - rect.left
-      const time = getTimeFromY(y, canvas!, duration.value)
+      const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
       if (time === null) return
 
       // 检查是否在按钮上
@@ -642,8 +619,8 @@ export function useAudioVisualizer() {
           // 检查是否在手柄上
           let isOnHandle = false
           for (const [id, region] of regions.value.entries()) {
-            const startY = (region.start / duration.value) * (canvas.height - PADDING * 2) + PADDING
-            const endY = (region.end / duration.value) * (canvas.height - PADDING * 2) + PADDING
+            const startY = (region.start / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
+            const endY = (region.end / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
             
             if (Math.abs(y - startY) <= HANDLE_SIZE || Math.abs(y - endY) <= HANDLE_SIZE) {
               canvas.style.cursor = 'ns-resize'
@@ -706,7 +683,7 @@ export function useAudioVisualizer() {
       const clickDuration = Date.now() - clickStartTime
       const rect = canvas.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
-      const time = getTimeFromY(y, canvas!, duration.value)
+      const time = getTimeFromY(y, canvas!, audioPlayer.duration.value)
       
       isDragging.value = false
       
@@ -738,25 +715,11 @@ export function useAudioVisualizer() {
       drawWaveform()
     })
     
-    // 创建音频源并连接
-    audioElement.value.src = URL.createObjectURL(blob)
-    const source = audioContext.value.createMediaElementSource(audioElement.value)
-    source.connect(audioContext.value.destination)
-    
     // 添加音频事件监听
-    audioElement.value.addEventListener('play', () => {
-      isPlaying.value = true
-    })
-    
-    audioElement.value.addEventListener('pause', () => {
-      isPlaying.value = false
-    })
-    
-    audioElement.value.addEventListener('timeupdate', () => {
-      currentTime.value = audioElement.value?.currentTime || 0
-      
+    audioPlayer.audioElement.value?.addEventListener('timeupdate', () => {
       // 计算当前播放位置对应的 Y 坐标
-      const currentY = (currentTime.value / duration.value) * (canvas!.height - PADDING * 2) + PADDING
+      if (!canvas) return
+      const currentY = (audioPlayer.currentTime.value / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
       
       // 获取容器的可视区域高度
       const containerHeight = container.clientHeight
@@ -806,13 +769,7 @@ export function useAudioVisualizer() {
     if (animationFrame) {
       cancelAnimationFrame(animationFrame)
     }
-    if (audioContext.value) {
-      audioContext.value.close()
-    }
-    if (audioElement.value) {
-      audioElement.value.pause()
-      audioElement.value.src = ''
-    }
+    audioPlayer.destroy()
     if (canvas) {
       // 移除 resize 事件监听
       window.removeEventListener('resize', (canvas as any)._resizeHandler)
@@ -821,29 +778,26 @@ export function useAudioVisualizer() {
     }
     canvasCtx = null
     channelData = null
-    isPlaying.value = false
-    duration.value = 0
-    currentTime.value = 0
   }
 
   const playPause = async () => {
-    if (!audioElement.value || !audioContext.value) return
+    if (!audioPlayer.audioElement.value || !audioPlayer.audioContext.value) return
 
     // 如果音频上下文被挂起，则恢复
-    if (audioContext.value.state === 'suspended') {
-      await audioContext.value.resume()
+    if (audioPlayer.audioContext.value.state === 'suspended') {
+      await audioPlayer.audioContext.value.resume()
     }
 
-    if (isPlaying.value) {
-      audioElement.value.pause()
+    if (audioPlayer.isPlaying.value) {
+      audioPlayer.audioElement.value.pause()
     } else {
-      await audioElement.value.play()
+      await audioPlayer.audioElement.value.play()
     }
   }
 
   const seek = (time: number) => {
-    if (!audioElement.value) return
-    audioElement.value.currentTime = Math.max(0, Math.min(time, duration.value))
+    if (!audioPlayer.audioElement.value) return
+    audioPlayer.audioElement.value.currentTime = Math.max(0, Math.min(time, audioPlayer.duration.value))
   }
 
   // 绘制选中区域
@@ -852,8 +806,8 @@ export function useAudioVisualizer() {
 
     const timeAxisWidth = 50
     const padding = 30
-    const startY = (selectionStart.value / duration.value) * (canvas.height - padding * 2) + padding
-    const endY = (selectionEnd.value / duration.value) * (canvas.height - padding * 2) + padding
+    const startY = (selectionStart.value / audioPlayer.duration.value) * (canvas.height - padding * 2) + padding
+    const endY = (selectionEnd.value / audioPlayer.duration.value) * (canvas.height - padding * 2) + padding
 
     // 绘制半透明遮罩
     canvasCtx.fillStyle = 'rgba(74, 158, 255, 0.2)'
@@ -903,8 +857,8 @@ export function useAudioVisualizer() {
     regions.value.forEach((region, id) => {
       if (!canvasCtx || !canvas) return
 
-      const startY = (region.start / duration.value) * (canvas.height - PADDING * 2) + PADDING
-      const endY = (region.end / duration.value) * (canvas.height - PADDING * 2) + PADDING
+      const startY = (region.start / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
+      const endY = (region.end / audioPlayer.duration.value) * (canvas.height - PADDING * 2) + PADDING
       const isEditing = editingAnnotation.value?.id === id
       const isHovered = hoveredRegion.value?.id === id
 
@@ -978,44 +932,33 @@ export function useAudioVisualizer() {
   }
 
   const setPlaybackRate = (rate: number) => {
-    if (!audioElement.value) return
+    if (!audioPlayer.audioElement.value) return
     // 限制倍速范围在 0.5-5 倍之间
     const newRate = Math.max(0.5, Math.min(5, rate))
-    playbackRate.value = newRate
-    audioElement.value.playbackRate = newRate
+    audioPlayer.playbackRate.value = newRate
+    audioPlayer.audioElement.value.playbackRate = newRate
   }
 
   const getPlaybackRate = () => {
-    return playbackRate.value
+    return audioPlayer.playbackRate.value
   }
 
-  onUnmounted(() => {
-    destroy()
-  })
-
   return {
-    isPlaying,
-    duration,
-    currentTime,
+    ...audioPlayer,
     pixelsPerSecond,
     selectedRegion,
     editingAnnotation,
-    regions, // 导出 regions
-    playbackRate, // 导出倍速状态
+    regions,
+    hoveredRegion,
     initialize,
     destroy,
-    playPause,
-    seek,
     zoomIn,
     zoomOut,
     setZoom,
     addRegion,
     updateRegion,
     removeRegion,
-    clearRegions, // 导出清除方法
-    hoveredRegion,
-    setPlaybackRate, // 导出设置倍速方法
-    getPlaybackRate, // 导出获取倍速方法
+    clearRegions,
     onAddButtonClick,
     onEditButtonClick,
     onDeleteButtonClick,
