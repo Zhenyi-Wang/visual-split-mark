@@ -22,10 +22,9 @@ export function useInteractionHandler() {
   const selectionStart = ref<number | null>(null)
   const selectionEnd = ref<number | null>(null)
   const selectedRegion = ref<{ start: number; end: number } | null>(null)
-  const hoveredRegion = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
+  const hoveredRegion = ref<{ id: string; start: number; end: number; text: string } | null>(null)
   const isDraggingAnnotation = ref(false)
   const draggingHandle = ref<'start' | 'end' | null>(null)
-  const editingAnnotation = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
 
   // 回调函数
   const onRegionClick = ref<RegionClickHandler | null>(null)
@@ -51,10 +50,12 @@ export function useInteractionHandler() {
       const startY = (region.start / duration) * (canvas.height - PADDING * 2) + PADDING
       const endY = (region.end / duration) * (canvas.height - PADDING * 2) + PADDING
       
-      if (Math.abs(y - startY) <= HANDLE_SIZE) {
+      // 增加手柄检测的容差
+      const handleTolerance = HANDLE_SIZE * 2
+      if (Math.abs(y - startY) <= handleTolerance) {
         return { id, isHandle: 'start', isTextArea: false }
       }
-      if (Math.abs(y - endY) <= HANDLE_SIZE) {
+      if (Math.abs(y - endY) <= handleTolerance) {
         return { id, isHandle: 'end', isTextArea: false }
       }
       
@@ -63,6 +64,33 @@ export function useInteractionHandler() {
       }
     }
     return null
+  }
+
+  // 清除选区
+  const clearSelection = () => {
+    selectionStart.value = null
+    selectionEnd.value = null
+    selectedRegion.value = null
+    return true
+  }
+
+  // 清除所有状态
+  const clearAll = () => {
+    clearSelection()
+    isDragging.value = false
+    isDraggingAnnotation.value = false
+    draggingHandle.value = null
+    hoveredRegion.value = null
+    return true
+  }
+
+  // 清除交互状态
+  const clearInteractionState = () => {
+    isDragging.value = false
+    isDraggingAnnotation.value = false
+    draggingHandle.value = null
+    hoveredRegion.value = null
+    return true
   }
 
   // 处理鼠标按下事件
@@ -88,6 +116,7 @@ export function useInteractionHandler() {
       if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
         if (onEditButtonClick.value) {
           onEditButtonClick.value(hoveredRegion.value.id)
+          clearSelection()
         }
         return clickStartTime
       }
@@ -98,6 +127,7 @@ export function useInteractionHandler() {
       if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
         if (onDeleteButtonClick.value) {
           onDeleteButtonClick.value(hoveredRegion.value.id)
+          clearSelection()
         }
         return clickStartTime
       }
@@ -109,6 +139,7 @@ export function useInteractionHandler() {
       if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
         if (onAddButtonClick.value) {
           onAddButtonClick.value()
+          clearSelection()
         }
         return clickStartTime
       }
@@ -119,6 +150,7 @@ export function useInteractionHandler() {
     if (!regionInfo) {
       const time = getTimeFromY(y, canvas, duration)
       if (time === null) return clickStartTime
+      clearSelection()
       isDragging.value = true
       selectionStart.value = time
       selectionEnd.value = time
@@ -130,9 +162,13 @@ export function useInteractionHandler() {
     if (regionInfo.isHandle) {
       const region = regions.get(regionInfo.id)
       if (region) {
-        editingAnnotation.value = { id: regionInfo.id, ...region }
+        clearSelection()
         isDraggingAnnotation.value = true
         draggingHandle.value = regionInfo.isHandle
+        hoveredRegion.value = { id: regionInfo.id, ...region }
+        if (onAnnotationChange.value) {
+          onAnnotationChange.value({ id: regionInfo.id, ...region })
+        }
       }
       return clickStartTime
     }
@@ -140,6 +176,7 @@ export function useInteractionHandler() {
     // 如果点击了标注区域本身，跳转到开始时间
     const region = regions.get(regionInfo.id)
     if (region) {
+      clearSelection()
       seek(region.start)
     }
     return clickStartTime
@@ -222,15 +259,18 @@ export function useInteractionHandler() {
     }
 
     // 处理拖动和选区
-    if (isDraggingAnnotation.value && editingAnnotation.value && draggingHandle.value) {
+    if (isDraggingAnnotation.value && draggingHandle.value && hoveredRegion.value) {
       // 更新标注边界
-      const newAnnotation = { ...editingAnnotation.value }
+      const newAnnotation = { ...hoveredRegion.value }
       if (draggingHandle.value === 'start') {
         newAnnotation.start = Math.min(time, newAnnotation.end)
       } else {
         newAnnotation.end = Math.max(time, newAnnotation.start)
       }
-      editingAnnotation.value = newAnnotation
+      hoveredRegion.value = newAnnotation
+      if (onAnnotationChange.value) {
+        onAnnotationChange.value(newAnnotation)
+      }
       return { type: 'annotation', data: newAnnotation }
     } else if (isDragging.value) {
       // 更新选区
@@ -262,14 +302,11 @@ export function useInteractionHandler() {
     clickStartTime: number,
     seek: (time: number) => void
   ) => {
-    if (isDraggingAnnotation.value && editingAnnotation.value) {
-      // 在拖拽结束时触发更新回调
-      if (onAnnotationChange.value) {
-        onAnnotationChange.value(editingAnnotation.value)
-      }
+    if (isDraggingAnnotation.value && hoveredRegion.value) {
+      const finalAnnotation = hoveredRegion.value
+      clearInteractionState()
+      return { type: 'annotation', data: finalAnnotation }
     }
-    isDraggingAnnotation.value = false
-    draggingHandle.value = null
     
     if (!isDragging.value) return null
     
@@ -282,9 +319,7 @@ export function useInteractionHandler() {
     
     if (clickDuration < 200 && selectionStart.value !== null && Math.abs(selectionStart.value - (time || 0)) < 0.1) {
       // 这是一个点击事件
-      selectionStart.value = null
-      selectionEnd.value = null
-      selectedRegion.value = null
+      clearAll()
       if (time !== null) {
         seek(time)
       }
@@ -295,6 +330,7 @@ export function useInteractionHandler() {
         start: Math.min(selectionStart.value, time),
         end: Math.max(selectionStart.value, time)
       }
+      clearInteractionState()
       return { type: 'selection', data: selectedRegion.value }
     }
     return null
@@ -303,11 +339,12 @@ export function useInteractionHandler() {
   // 处理鼠标离开事件
   const handleMouseLeave = (canvas: HTMLCanvasElement) => {
     canvas.style.cursor = 'default'
-    hoveredRegion.value = null
-    if (isDragging.value) {
-      isDragging.value = false
+    if (isDragging.value || isDraggingAnnotation.value) {
+      clearAll()
+      return true
     }
-    return true
+    clearInteractionState()
+    return false
   }
 
   return {
@@ -319,7 +356,6 @@ export function useInteractionHandler() {
     hoveredRegion,
     isDraggingAnnotation,
     draggingHandle,
-    editingAnnotation,
 
     // 回调设置
     onRegionClick,
@@ -333,6 +369,9 @@ export function useInteractionHandler() {
     handleMouseMove,
     handleMouseUp,
     handleMouseLeave,
-    findRegionAtPosition
+    findRegionAtPosition,
+    clearSelection,
+    clearAll,
+    clearInteractionState
   }
 } 

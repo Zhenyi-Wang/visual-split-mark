@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { AudioFile } from '~/types/project'
 import type {
   Region,
@@ -29,6 +29,9 @@ export function useAudioVisualizer() {
   const pixelsPerSecond = ref(DEFAULT_PIXELS_PER_SECOND)
   let animationFrame: number | null = null
 
+  // 编辑状态管理
+  const editingAnnotation = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
+
   // 添加按钮区域信息
   const addButtonBounds = ref<ButtonBounds | null>(null)
   const editButtonBounds = ref<ButtonBounds | null>(null)
@@ -50,7 +53,7 @@ export function useAudioVisualizer() {
     // 设置回调函数
     interactionHandler.onRegionClick.value = onRegionClickHandler || null
     interactionHandler.onAnnotationChange.value = onAnnotationChangeHandler || null
-
+    
     // 添加音频事件监听
     audioPlayer.audioElement.value?.addEventListener('timeupdate', () => {
       // 计算当前播放位置对应的 Y 坐标
@@ -68,6 +71,9 @@ export function useAudioVisualizer() {
         top: Math.max(0, targetScrollTop),
         behavior: 'smooth'
       })
+      
+      // 清除选区
+      interactionHandler.clearSelection()
       
       updateDrawing()
     })
@@ -132,6 +138,9 @@ export function useAudioVisualizer() {
         clickStartTime,
         audioPlayer.seek
       )
+      if (result?.type === 'annotation' && result.data && onAnnotationChangeHandler) {
+        onAnnotationChangeHandler(result.data)
+      }
       if (result) {
         updateDrawing()
       }
@@ -143,6 +152,68 @@ export function useAudioVisualizer() {
         updateDrawing()
       }
     })
+
+    // 设置标注变更回调
+    interactionHandler.onAnnotationChange.value = (annotation) => {
+      // 先更新区域
+      regionManager.updateRegion(annotation)
+      // 如果不是在拖动状态，才清理状态
+      if (!interactionHandler.isDraggingAnnotation.value) {
+        interactionHandler.clearAll()
+      }
+      // 如果是编辑状态，重新设置编辑状态
+      if (annotation.id === editingAnnotation.value?.id) {
+        editingAnnotation.value = { ...annotation }
+      }
+      updateDrawing()
+    }
+
+    // 设置按钮回调
+    interactionHandler.onAddButtonClick.value = () => {
+      if (interactionHandler.selectedRegion.value) {
+        const id = crypto.randomUUID()
+        const annotation: Region & { id: string } = {
+          id,
+          start: interactionHandler.selectedRegion.value.start,
+          end: interactionHandler.selectedRegion.value.end,
+          text: ''
+        }
+        regionManager.addRegion(annotation)
+        // 清理所有状态
+        interactionHandler.clearAll()
+        // 设置为编辑状态
+        editingAnnotation.value = { ...annotation }
+        updateDrawing()
+      }
+    }
+
+    interactionHandler.onEditButtonClick.value = (id) => {
+      if (!id) return
+      const region = regionManager.getRegion(id)
+      if (region) {
+        // 清理所有状态
+        interactionHandler.clearAll()
+        // 设置为编辑状态
+        editingAnnotation.value = { id, ...region }
+        // 触发标注变更回调
+        if (onAnnotationChangeHandler) {
+          onAnnotationChangeHandler({ id, ...region })
+        }
+        updateDrawing()
+      }
+    }
+
+    interactionHandler.onDeleteButtonClick.value = (id) => {
+      if (!id) return
+      regionManager.removeRegion(id)
+      // 清理所有状态
+      interactionHandler.clearAll()
+      // 清除编辑状态
+      if (editingAnnotation.value?.id === id) {
+        editingAnnotation.value = null
+      }
+      updateDrawing()
+    }
 
     // 初始绘制
     updateDrawing()
@@ -197,6 +268,11 @@ export function useAudioVisualizer() {
       addButtonBounds.value = null
     }
 
+    // 准备选区信息
+    const selectionRange = interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null
+      ? { start: interactionHandler.selectionStart.value, end: interactionHandler.selectionEnd.value }
+      : null
+
     // 准备按钮边界信息
     const buttonBounds = {
       add: addButtonBounds.value,
@@ -204,12 +280,7 @@ export function useAudioVisualizer() {
       delete: deleteButtonBounds.value
     }
 
-    // 准备选区信息
-    const selectionRange = interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null
-      ? { start: interactionHandler.selectionStart.value, end: interactionHandler.selectionEnd.value }
-      : null
-
-    // 调用波形绘制器的绘制方法
+    // 绘制波形
     waveformDrawer.drawWaveform(
       audioPlayer.duration.value,
       audioPlayer.currentTime.value,
@@ -217,53 +288,67 @@ export function useAudioVisualizer() {
       regionManager.getAllRegions(),
       interactionHandler.hoveredRegion.value,
       selectionRange,
-      interactionHandler.editingAnnotation.value,
+      editingAnnotation.value,
       buttonBounds
     )
   }
 
+  // 销毁函数
   const destroy = () => {
-    if (animationFrame) {
+    // 停止动画
+    if (animationFrame !== null) {
       cancelAnimationFrame(animationFrame)
+      animationFrame = null
     }
-    audioPlayer.destroy()
-    waveformDrawer.destroy()
+
+    // 移除窗口大小变化监听
     if (waveformDrawer.canvas.value) {
-      window.removeEventListener('resize', (waveformDrawer.canvas.value as any)._resizeHandler)
+      const resizeHandler = (waveformDrawer.canvas.value as any)._resizeHandler
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler)
+      }
     }
-  }
 
-  const setZoom = (value: number) => {
-    pixelsPerSecond.value = Math.max(1, Math.min(500, value))
-    updateDrawing()
-  }
+    // 销毁音频播放器
+    audioPlayer.destroy()
 
-  const zoomIn = () => {
-    setZoom(pixelsPerSecond.value * 1.2)
-  }
-
-  const zoomOut = () => {
-    setZoom(pixelsPerSecond.value / 1.2)
+    // 清理状态
+    interactionHandler.clearAll()
+    editingAnnotation.value = null
   }
 
   return {
-    ...audioPlayer,
+    // 状态
+    isPlaying: computed(() => audioPlayer.isPlaying.value),
+    duration: computed(() => audioPlayer.duration.value),
+    currentTime: computed(() => audioPlayer.currentTime.value),
     pixelsPerSecond,
-    selectedRegion: interactionHandler.selectedRegion,
-    editingAnnotation: interactionHandler.editingAnnotation,
-    regions: regionManager.regions,
-    hoveredRegion: interactionHandler.hoveredRegion,
+    selectedRegion: computed(() => interactionHandler.selectedRegion.value),
+    editingAnnotation,
+
+    // 方法
     initialize,
     destroy,
-    zoomIn,
-    zoomOut,
-    setZoom,
+    playPause: audioPlayer.playPause,
+    seek: audioPlayer.seek,
+    zoomIn: () => {
+      pixelsPerSecond.value = Math.min(pixelsPerSecond.value * 1.5, 1000)
+      updateDrawing()
+    },
+    zoomOut: () => {
+      pixelsPerSecond.value = Math.max(pixelsPerSecond.value / 1.5, 10)
+      updateDrawing()
+    },
     addRegion: regionManager.addRegion,
     updateRegion: regionManager.updateRegion,
     removeRegion: regionManager.removeRegion,
     clearRegions: regionManager.clearRegions,
+    playbackRate: computed(() => audioPlayer.playbackRate.value),
+    setPlaybackRate: audioPlayer.setPlaybackRate,
+
+    // 回调设置
     onAddButtonClick: interactionHandler.onAddButtonClick,
     onEditButtonClick: interactionHandler.onEditButtonClick,
-    onDeleteButtonClick: interactionHandler.onDeleteButtonClick,
+    onDeleteButtonClick: interactionHandler.onDeleteButtonClick
   }
 } 

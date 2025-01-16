@@ -2,6 +2,7 @@ export interface Project {
   id: string
   name: string
   description?: string
+  whisperApiUrl?: string
   createdAt: Date
   updatedAt: Date
 }

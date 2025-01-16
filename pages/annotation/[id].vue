@@ -230,13 +230,15 @@ const initializeVisualizer = async () => {
     await initialize(
       waveformRef.value, 
       audioFile,
-      null,
+      undefined,
       async (annotation) => {
         // 更新标注
         await projectStore.updateAnnotation({
           ...annotation,
           audioFileId: currentAudioFile.value?.id || '',
+          text: annotation.text,
           whisperText: '',
+          createdAt: new Date(),
           updatedAt: new Date()
         })
         await saveToStorage() // 自动保存
@@ -270,13 +272,15 @@ onMounted(async () => {
       await initialize(
         waveformRef.value, 
         audioFile,
-        null,
+        undefined,
         async (annotation) => {
           // 更新标注
           await projectStore.updateAnnotation({
             ...annotation,
             audioFileId: currentAudioFile.value?.id || '',
+            text: annotation.text,
             whisperText: '',
+            createdAt: new Date(),
             updatedAt: new Date()
           })
           await saveToStorage() // 自动保存
@@ -365,7 +369,9 @@ const handlePlayPause = async () => {
 }
 
 const handleEditAnnotation = (annotation: Annotation) => {
-  editingAnnotation.value = annotation
+  pendingAnnotation.value = annotation
+  annotationText.value = annotation.text || ''
+  showTextInputModal.value = true
   seek(annotation.start)
 }
 
@@ -393,13 +399,9 @@ const handleConfirmDelete = async () => {
 }
 
 const handleCancel = () => {
-  showEditModal.value = false
-  formModel.value = {
-    id: '',
-    start: 0,
-    end: 0,
-    text: ''
-  }
+  showTextInputModal.value = false
+  annotationText.value = ''
+  pendingAnnotation.value = null
 }
 
 const handleSubmit = async () => {
@@ -472,9 +474,11 @@ const saveToStorage = async () => {
 const handleConfirmAnnotation = async () => {
   if (!pendingAnnotation.value) return
   
-  const annotation = {
+  const annotation: Annotation = {
     ...pendingAnnotation.value,
-    text: annotationText.value,
+    text: annotationText.value || '',
+    whisperText: pendingAnnotation.value.whisperText || '',
+    createdAt: pendingAnnotation.value.createdAt || new Date(),
     updatedAt: new Date()
   }
   
@@ -484,7 +488,6 @@ const handleConfirmAnnotation = async () => {
   if (pendingAnnotation.value.text === '') {
     // 如果是新建标注
     addRegion(annotation)
-    editingAnnotation.value = annotation
     message.success('标注已添加')
   } else {
     // 如果是编辑标注
@@ -518,6 +521,7 @@ const handleAddAnnotation = () => {
     updatedAt: new Date()
   }
   pendingAnnotation.value = annotation
+  annotationText.value = ''
   showTextInputModal.value = true
 }
 
@@ -530,6 +534,57 @@ watch(() => projectStore.audioFileAnnotations, (newAnnotations) => {
     addRegion(annotation)
   })
 }, { deep: true })
+
+// 修改 transcribe 函数
+const transcribe = async (audioFile: AudioFile): Promise<Annotation[]> => {
+  if (!currentProject.value?.whisperApiUrl) {
+    throw new Error('Whisper API URL not configured')
+  }
+
+  // TODO: 实现 Whisper API 调用
+  // 返回一个空数组作为示例
+  return []
+}
+
+// 修改 exportAnnotations 函数
+const exportAnnotations = async (audioFile: AudioFile) => {
+  if (!annotations.value.length) return
+
+  // 准备导出数据
+  const exportData = {
+    audioFile: {
+      id: audioFile.id,
+      originalName: audioFile.originalName,
+      duration: audioFile.duration
+    },
+    annotations: annotations.value.map(annotation => ({
+      id: annotation.id,
+      start: annotation.start,
+      end: annotation.end,
+      text: annotation.text,
+      whisperText: annotation.whisperText,
+      createdAt: annotation.createdAt,
+      updatedAt: annotation.updatedAt
+    }))
+  }
+
+  // 创建 Blob 对象
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+  
+  // 创建下载链接
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `annotations_${audioFile.originalName}.json`
+  
+  // 触发下载
+  document.body.appendChild(link)
+  link.click()
+  
+  // 清理
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>

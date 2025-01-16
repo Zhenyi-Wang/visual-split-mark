@@ -11,7 +11,7 @@ export interface RegionInfo {
 export interface Region {
   start: number
   end: number
-  text?: string
+  text: string
 }
 
 // 按钮边界接口
