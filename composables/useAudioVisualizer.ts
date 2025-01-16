@@ -19,14 +19,15 @@ import {
 import { useAudioPlayer } from './useAudioPlayer'
 import { useWaveformDrawer } from './useWaveformDrawer'
 import { useInteractionHandler } from './useInteractionHandler'
+import { useRegionManager } from './useRegionManager'
 
 export function useAudioVisualizer() {
   const audioPlayer = useAudioPlayer()
   const waveformDrawer = useWaveformDrawer()
   const interactionHandler = useInteractionHandler()
+  const regionManager = useRegionManager()
   const pixelsPerSecond = ref(DEFAULT_PIXELS_PER_SECOND)
   let animationFrame: number | null = null
-  const regions = ref<Map<string, Region>>(new Map())
 
   // 添加按钮区域信息
   const addButtonBounds = ref<ButtonBounds | null>(null)
@@ -92,7 +93,7 @@ export function useAudioVisualizer() {
         waveformDrawer.canvas.value,
         container,
         audioPlayer.duration.value,
-        regions.value,
+        regionManager.getAllRegions(),
         addButtonBounds.value,
         editButtonBounds.value,
         deleteButtonBounds.value,
@@ -108,11 +109,14 @@ export function useAudioVisualizer() {
         waveformDrawer.canvas.value,
         container,
         audioPlayer.duration.value,
-        regions.value,
+        regionManager.getAllRegions(),
         addButtonBounds.value,
         editButtonBounds.value,
         deleteButtonBounds.value
       )
+      if (result?.type === 'annotation' && result.data) {
+        regionManager.updateRegion(result.data)
+      }
       if (result) {
         updateDrawing()
       }
@@ -210,7 +214,7 @@ export function useAudioVisualizer() {
       audioPlayer.duration.value,
       audioPlayer.currentTime.value,
       pixelsPerSecond.value,
-      regions.value,
+      regionManager.getAllRegions(),
       interactionHandler.hoveredRegion.value,
       selectionRange,
       interactionHandler.editingAnnotation.value,
@@ -242,43 +246,22 @@ export function useAudioVisualizer() {
     setZoom(pixelsPerSecond.value / 1.2)
   }
 
-  // 区域管理方法
-  const addRegion = (annotation: Region & { id: string }) => {
-    regions.value.set(annotation.id, annotation)
-    updateDrawing()
-  }
-
-  const updateRegion = (annotation: Region & { id: string }) => {
-    regions.value.set(annotation.id, annotation)
-    updateDrawing()
-  }
-
-  const removeRegion = (id: string) => {
-    regions.value.delete(id)
-    updateDrawing()
-  }
-
-  const clearRegions = () => {
-    regions.value.clear()
-    updateDrawing()
-  }
-
   return {
     ...audioPlayer,
     pixelsPerSecond,
     selectedRegion: interactionHandler.selectedRegion,
     editingAnnotation: interactionHandler.editingAnnotation,
-    regions,
+    regions: regionManager.regions,
     hoveredRegion: interactionHandler.hoveredRegion,
     initialize,
     destroy,
     zoomIn,
     zoomOut,
     setZoom,
-    addRegion,
-    updateRegion,
-    removeRegion,
-    clearRegions,
+    addRegion: regionManager.addRegion,
+    updateRegion: regionManager.updateRegion,
+    removeRegion: regionManager.removeRegion,
+    clearRegions: regionManager.clearRegions,
     onAddButtonClick: interactionHandler.onAddButtonClick,
     onEditButtonClick: interactionHandler.onEditButtonClick,
     onDeleteButtonClick: interactionHandler.onDeleteButtonClick,
