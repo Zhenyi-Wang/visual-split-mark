@@ -173,3 +173,236 @@ storage/
 - 是否需要迁移已有数据？
 - 是否需要优化性能？
 - 是否需要添加新功能？ 
+
+# useAudioVisualizer.ts 重构计划
+
+## 问题分析
+1. 文件过长(1000+行)
+2. 功能混杂:
+   - 音频处理
+   - Canvas 绘制
+   - 事件处理
+   - 状态管理
+   - UI 交互
+
+## 拆分策略
+将按功能模块拆分成多个独立文件:
+
+### 1. types/audio.ts
+- 定义所有类型接口
+```typescript
+interface RegionInfo {
+  id: string
+  isHandle: 'start' | 'end' | null
+  isTextArea: boolean
+}
+
+interface Region {
+  start: number
+  end: number
+  text?: string
+}
+
+interface ButtonBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+interface AudioVisualizerState {
+  isPlaying: boolean
+  duration: number
+  currentTime: number
+  pixelsPerSecond: number
+  playbackRate: number
+  // ...其他状态
+}
+```
+
+### 2. composables/useAudioPlayer.ts
+音频播放控制相关:
+```typescript
+export function useAudioPlayer() {
+  // 音频元素相关状态和方法
+  const audioContext = ref<AudioContext | null>(null)
+  const audioElement = ref<HTMLAudioElement | null>(null)
+  const isPlaying = ref(false)
+  const duration = ref(0)
+  const currentTime = ref(0)
+  const playbackRate = ref(1)
+
+  // 音频控制方法
+  const initialize = async (audioFile) => {}
+  const playPause = async () => {}
+  const seek = (time: number) => {}
+  const setPlaybackRate = (rate: number) => {}
+  const destroy = () => {}
+
+  return {
+    audioContext,
+    audioElement,
+    isPlaying,
+    duration,
+    currentTime,
+    playbackRate,
+    initialize,
+    playPause,
+    seek,
+    setPlaybackRate,
+    destroy
+  }
+}
+```
+
+### 3. composables/useWaveformDrawer.ts  
+波形绘制相关:
+```typescript
+export function useWaveformDrawer() {
+  // Canvas 相关状态
+  const canvas = ref<HTMLCanvasElement | null>(null)
+  const canvasCtx = ref<CanvasRenderingContext2D | null>(null)
+  const channelData = ref<Float32Array | null>(null)
+
+  // 绘制方法
+  const initialize = (container: HTMLElement) => {}
+  const drawWaveform = () => {}
+  const drawTimeAxis = () => {}
+  const drawRegions = () => {}
+  const drawSelection = () => {}
+  const destroy = () => {}
+
+  return {
+    canvas,
+    canvasCtx,
+    channelData,
+    initialize,
+    drawWaveform,
+    drawTimeAxis,
+    drawRegions,
+    drawSelection,
+    destroy
+  }
+}
+```
+
+### 4. composables/useRegionManager.ts
+区域管理相关:
+```typescript
+export function useRegionManager() {
+  const regions = ref<Map<string, Region>>(new Map())
+  const selectedRegion = ref<Region | null>(null)
+  const hoveredRegion = ref<Region | null>(null)
+  const editingAnnotation = ref<Region | null>(null)
+
+  // 区域操作方法
+  const addRegion = (annotation: Region) => {}
+  const updateRegion = (annotation: Region) => {}
+  const removeRegion = (id: string) => {}
+  const clearRegions = () => {}
+
+  return {
+    regions,
+    selectedRegion,
+    hoveredRegion,
+    editingAnnotation,
+    addRegion,
+    updateRegion,
+    removeRegion,
+    clearRegions
+  }
+}
+```
+
+### 5. composables/useEventHandler.ts
+事件处理相关:
+```typescript
+export function useEventHandler(
+  canvas: Ref<HTMLCanvasElement | null>,
+  waveformDrawer: ReturnType<typeof useWaveformDrawer>,
+  regionManager: ReturnType<typeof useRegionManager>
+) {
+  // 事件状态
+  const isDragging = ref(false)
+  const isDraggingAnnotation = ref(false)
+  const draggingHandle = ref<'start' | 'end' | null>(null)
+
+  // 事件处理方法
+  const handleMouseDown = (e: MouseEvent) => {}
+  const handleMouseMove = (e: MouseEvent) => {}
+  const handleMouseUp = (e: MouseEvent) => {}
+  const handleMouseLeave = (e: MouseEvent) => {}
+
+  return {
+    isDragging,
+    isDraggingAnnotation,
+    draggingHandle,
+    initialize: () => {
+      // 添加事件监听
+    },
+    destroy: () => {
+      // 移除事件监听
+    }
+  }
+}
+```
+
+### 6. utils/timeFormat.ts
+时间格式化工具:
+```typescript
+export const formatTimeAxis = (seconds: number): string => {}
+export const getTimeFromY = (y: number, canvas: HTMLCanvasElement): number | null => {}
+```
+
+### 7. constants/visualizer.ts
+常量配置:
+```typescript
+export const PADDING = 30
+export const TIME_AXIS_WIDTH = 50
+export const WAVEFORM_WIDTH = 300
+export const HANDLE_SIZE = 4
+export const HANDLE_VISUAL_SIZE = 6
+export const BUTTON_SIZE = 32
+export const BUTTON_PADDING = 8
+export const BUTTON_GAP = 8
+```
+
+## 实施步骤
+
+### 阶段 1: 基础设施
+1. 创建 types/audio.ts
+2. 创建 constants/visualizer.ts
+3. 创建 utils/timeFormat.ts
+4. 修改主文件引用这些新文件
+5. 测试基本功能
+
+### 阶段 2: 核心功能分离
+1. 创建并实现 useAudioPlayer.ts
+2. 替换主文件中音频相关代码
+3. 测试音频功能
+
+### 阶段 3: 绘制功能分离
+1. 创建并实现 useWaveformDrawer.ts
+2. 替换主文件中绘制相关代码
+3. 测试绘制功能
+
+### 阶段 4: 区域管理分离
+1. 创建并实现 useRegionManager.ts
+2. 替换主文件中区域管理相关代码
+3. 测试区域管理功能
+
+### 阶段 5: 事件处理分离
+1. 创建并实现 useEventHandler.ts
+2. 替换主文件中事件处理相关代码
+3. 测试事件处理功能
+
+### 阶段 6: 集成与优化
+1. 在主文件中组合所有分离的功能
+2. 确保所有功能正常工作
+3. 进行性能优化
+
+## 预期效果
+1. 代码更清晰、模块化
+2. 更容易维护和测试
+3. 更好的复用性
+4. 性能可能略有提升(减少重绘等) 

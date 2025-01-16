@@ -1,13 +1,34 @@
 import { ref } from 'vue'
 import type { AudioFile } from '~/types/project'
 import { loadBlob } from '~/utils/file'
-
-// 添加类型定义
-interface RegionInfo {
-  id: string;
-  isHandle: 'start' | 'end' | null;
-  isTextArea: boolean;
-}
+import type {
+  RegionInfo,
+  Region,
+  ButtonBounds,
+  RegionClickHandler,
+  AnnotationChangeHandler,
+  ButtonClickHandler
+} from '~/types/audio'
+import {
+  PADDING,
+  TIME_AXIS_WIDTH,
+  WAVEFORM_WIDTH,
+  HANDLE_SIZE,
+  HANDLE_VISUAL_SIZE,
+  BUTTON_SIZE,
+  BUTTON_PADDING,
+  BUTTON_GAP,
+  DEFAULT_PIXELS_PER_SECOND,
+  MIN_PLAYBACK_RATE,
+  MAX_PLAYBACK_RATE,
+  COLORS
+} from '~/constants/visualizer'
+import {
+  formatTimeAxis,
+  getTimeFromY,
+  getYFromTime,
+  formatPlayTime
+} from '~/utils/timeFormat'
 
 export function useAudioVisualizer() {
   const audioContext = ref<AudioContext | null>(null)
@@ -15,8 +36,8 @@ export function useAudioVisualizer() {
   const isPlaying = ref(false)
   const duration = ref(0)
   const currentTime = ref(0)
-  const pixelsPerSecond = ref(50) // 默认每秒50像素
-  const playbackRate = ref(1) // 添加倍速状态
+  const pixelsPerSecond = ref(DEFAULT_PIXELS_PER_SECOND)
+  const playbackRate = ref(1)
   let animationFrame: number | null = null
   let canvasCtx: CanvasRenderingContext2D | null = null
   let canvas: HTMLCanvasElement | null = null
@@ -27,31 +48,21 @@ export function useAudioVisualizer() {
   const selectedRegion = ref<{ start: number; end: number } | null>(null)
   const regions = ref<Map<string, { start: number; end: number; text?: string }>>(new Map())
   const hoveredRegion = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
-  const onRegionClick = ref<((id: string) => void) | null>(null)
+  const onRegionClick = ref<RegionClickHandler | null>(null)
   const isDraggingAnnotation = ref(false)
   const draggingHandle = ref<'start' | 'end' | null>(null)
   const editingAnnotation = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
-  const onAnnotationChange = ref<((annotation: { id: string; start: number; end: number; text?: string }) => void) | null>(null)
-
-  // 提升常用常量到组件级别
-  const PADDING = 30 // 上下padding
-  const TIME_AXIS_WIDTH = 50 // 时间轴宽度
-  const WAVEFORM_WIDTH = 300 // 波形区域宽度
-  const HANDLE_SIZE = 4 // 拖拽手柄触发区域大小
-  const HANDLE_VISUAL_SIZE = 6 // 拖拽手柄视觉大小
-  const BUTTON_SIZE = 32 // 按钮尺寸
-  const BUTTON_PADDING = 8 // 按钮边距
-  const BUTTON_GAP = 8 // 按钮间距
+  const onAnnotationChange = ref<AnnotationChangeHandler | null>(null)
 
   // 添加按钮区域信息
-  const addButtonBounds = ref<{ x: number; y: number; width: number; height: number } | null>(null)
-  const editButtonBounds = ref<{ x: number; y: number; width: number; height: number } | null>(null)
-  const deleteButtonBounds = ref<{ x: number; y: number; width: number; height: number } | null>(null)
+  const addButtonBounds = ref<ButtonBounds | null>(null)
+  const editButtonBounds = ref<ButtonBounds | null>(null)
+  const deleteButtonBounds = ref<ButtonBounds | null>(null)
 
   // 添加按钮点击回调
-  const onAddButtonClick = ref<(() => void) | null>(null)
-  const onEditButtonClick = ref<((id: string) => void) | null>(null)
-  const onDeleteButtonClick = ref<((id: string) => void) | null>(null)
+  const onAddButtonClick = ref<ButtonClickHandler | null>(null)
+  const onEditButtonClick = ref<ButtonClickHandler | null>(null)
+  const onDeleteButtonClick = ref<ButtonClickHandler | null>(null)
 
   // 绘制圆形按钮的辅助函数
   const drawCircleButton = (x: number, y: number, size: number, color: string, icon: 'add' | 'edit' | 'delete') => {
@@ -111,7 +122,7 @@ export function useAudioVisualizer() {
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height)
 
     // 绘制时间轴背景
-    canvasCtx.fillStyle = '#f5f5f5'
+    canvasCtx.fillStyle = COLORS.timeAxis.background
     canvasCtx.fillRect(0, 0, TIME_AXIS_WIDTH, canvas.height)
 
     // 绘制波形区域背景
@@ -190,8 +201,8 @@ export function useAudioVisualizer() {
 
     // 绘制时间刻度和文本
     canvasCtx.beginPath()
-    canvasCtx.strokeStyle = '#d9d9d9'
-    canvasCtx.fillStyle = '#666'
+    canvasCtx.strokeStyle = COLORS.timeAxis.line.secondary
+    canvasCtx.fillStyle = COLORS.text.secondary
     canvasCtx.font = '12px Arial'
     canvasCtx.textAlign = 'right'
     canvasCtx.textBaseline = 'middle'
@@ -201,10 +212,10 @@ export function useAudioVisualizer() {
     
     // 先绘制次要刻度
     canvasCtx.beginPath()
-    canvasCtx.strokeStyle = '#d9d9d9'
+    canvasCtx.strokeStyle = COLORS.timeAxis.line.secondary
     canvasCtx.lineWidth = 1
     for (let second = 0; second <= totalSeconds; second += minorInterval) {
-      const y = (second / 60) * minuteHeight + PADDING
+      const y = getYFromTime(second, canvas!, duration.value)
       canvasCtx.moveTo(TIME_AXIS_WIDTH - 4, y)
       canvasCtx.lineTo(TIME_AXIS_WIDTH, y)
     }
@@ -212,15 +223,15 @@ export function useAudioVisualizer() {
 
     // 绘制主要刻度和文本
     canvasCtx.beginPath()
-    canvasCtx.strokeStyle = '#999'
+    canvasCtx.strokeStyle = COLORS.timeAxis.line.primary
     canvasCtx.lineWidth = 1.5
-    canvasCtx.fillStyle = '#333'
+    canvasCtx.fillStyle = COLORS.text.primary
     canvasCtx.font = '12px Arial'
     canvasCtx.textAlign = 'right'
     canvasCtx.textBaseline = 'middle'
 
     for (let second = 0; second <= totalSeconds; second += timeInterval) {
-      const y = (second / 60) * minuteHeight + PADDING
+      const y = getYFromTime(second, canvas!, duration.value)
       
       // 根据时间间隔决定刻度线长度
       const isMainTick = second % 60 === 0 // 整分钟为主刻度
@@ -239,7 +250,7 @@ export function useAudioVisualizer() {
     canvasCtx.stroke()
 
     // 修改波形绘制范围
-    canvasCtx.fillStyle = '#4a9eff'
+    canvasCtx.fillStyle = COLORS.waveform
     for (let i = 0; i < totalBars; i++) {
       const startSample = i * samplesPerBar
       const endSample = startSample + samplesPerBar
@@ -262,10 +273,10 @@ export function useAudioVisualizer() {
     // 修改进度线范围
     if (audioElement.value) {
       const progress = audioElement.value.currentTime / duration.value
-      const progressY = progress * (canvas.height - PADDING * 2) + PADDING
+      const progressY = getYFromTime(audioElement.value.currentTime, canvas!, duration.value)
 
       canvasCtx.beginPath()
-      canvasCtx.strokeStyle = '#ff4d4f'
+      canvasCtx.strokeStyle = COLORS.progress
       canvasCtx.lineWidth = 2
       canvasCtx.moveTo(TIME_AXIS_WIDTH, progressY)
       canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, progressY)
@@ -274,12 +285,12 @@ export function useAudioVisualizer() {
 
     // 修改标注区域绘制
     regions.value.forEach((region, id) => {
-      const startY = (region.start / duration.value) * (canvas!.height - PADDING * 2) + PADDING
-      const endY = (region.end / duration.value) * (canvas!.height - PADDING * 2) + PADDING
+      const startY = getYFromTime(region.start, canvas!, duration.value)
+      const endY = getYFromTime(region.end, canvas!, duration.value)
       const isHovered = hoveredRegion.value?.id === id
 
       // 绘制波形区域的标注背景
-      canvasCtx!.fillStyle = isHovered ? 'rgba(255, 182, 193, 0.3)' : 'rgba(255, 182, 193, 0.2)'
+      canvasCtx!.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
       canvasCtx!.fillRect(TIME_AXIS_WIDTH, Math.min(startY, endY), WAVEFORM_WIDTH, Math.abs(endY - startY))
 
       // 如果是当前选中的标注，绘制编辑和删除按钮
@@ -288,7 +299,7 @@ export function useAudioVisualizer() {
 
         // 绘制删除按钮（在最右边）
         const deleteButtonX = canvas.width - BUTTON_SIZE - BUTTON_PADDING
-        drawCircleButton(deleteButtonX, buttonY, BUTTON_SIZE, '#ff4d4f', 'delete')
+        drawCircleButton(deleteButtonX, buttonY, BUTTON_SIZE, COLORS.button.delete, 'delete')
         
         // 计算删除按钮的点击判定区域
         deleteButtonBounds.value = {
@@ -300,7 +311,7 @@ export function useAudioVisualizer() {
 
         // 绘制编辑按钮（在删除按钮左边）
         const editButtonX = deleteButtonX - BUTTON_SIZE - BUTTON_GAP
-        drawCircleButton(editButtonX, buttonY, BUTTON_SIZE, '#4a9eff', 'edit')
+        drawCircleButton(editButtonX, buttonY, BUTTON_SIZE, COLORS.button.edit, 'edit')
         
         // 计算编辑按钮的点击判定区域
         editButtonBounds.value = {
@@ -313,7 +324,7 @@ export function useAudioVisualizer() {
 
       // 绘制波形区域的标注边界线
       canvasCtx!.beginPath()
-      canvasCtx!.strokeStyle = isHovered ? '#ff1493' : '#ff69b4'
+      canvasCtx!.strokeStyle = isHovered ? COLORS.region.border.hover : COLORS.region.border.normal
       canvasCtx!.lineWidth = isHovered ? 2 : 1
       canvasCtx!.moveTo(TIME_AXIS_WIDTH, startY)
       canvasCtx!.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, startY)
@@ -331,11 +342,11 @@ export function useAudioVisualizer() {
       const textX = TIME_AXIS_WIDTH + WAVEFORM_WIDTH + 16 // 标注区域左边距
       
       // 绘制标注区域的背景
-      canvasCtx!.fillStyle = isHovered ? 'rgba(255, 182, 193, 0.1)' : 'transparent'
+      canvasCtx!.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
       canvasCtx!.fillRect(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, Math.min(startY, endY), annotationWidth, Math.abs(endY - startY))
 
       // 绘制文本
-      canvasCtx!.fillStyle = '#333'
+      canvasCtx!.fillStyle = COLORS.text.primary
       canvasCtx!.textAlign = 'left'
       
       // 文本换行处理
@@ -367,14 +378,14 @@ export function useAudioVisualizer() {
 
     // 修改选区绘制范围
     if (selectionStart.value !== null && selectionEnd.value !== null) {
-      const startY = (selectionStart.value / duration.value) * (canvas.height - PADDING * 2) + PADDING
-      const endY = (selectionEnd.value / duration.value) * (canvas.height - PADDING * 2) + PADDING
+      const startY = getYFromTime(selectionStart.value, canvas!, duration.value)
+      const endY = getYFromTime(selectionEnd.value, canvas!, duration.value)
 
-      canvasCtx.fillStyle = 'rgba(74, 158, 255, 0.2)'
+      canvasCtx.fillStyle = COLORS.selection.fill
       canvasCtx.fillRect(TIME_AXIS_WIDTH, Math.min(startY, endY), WAVEFORM_WIDTH, Math.abs(endY - startY))
 
       canvasCtx.beginPath()
-      canvasCtx.strokeStyle = '#4a9eff'
+      canvasCtx.strokeStyle = COLORS.selection.border
       canvasCtx.lineWidth = 2
       canvasCtx.moveTo(TIME_AXIS_WIDTH, startY)
       canvasCtx.lineTo(TIME_AXIS_WIDTH + WAVEFORM_WIDTH, startY)
@@ -386,7 +397,7 @@ export function useAudioVisualizer() {
       const buttonX = TIME_AXIS_WIDTH + WAVEFORM_WIDTH - BUTTON_SIZE - BUTTON_PADDING
       const buttonY = Math.min(startY, endY) + BUTTON_PADDING
       
-      drawCircleButton(buttonX, buttonY, BUTTON_SIZE, '#4a9eff', 'add')
+      drawCircleButton(buttonX, buttonY, BUTTON_SIZE, COLORS.button.add, 'add')
 
       // 存储按钮区域信息，用于点击检测
       addButtonBounds.value = {
@@ -424,13 +435,13 @@ export function useAudioVisualizer() {
     if (y < PADDING || y > canvas.height - PADDING) return null
     
     // 计算时间点
-    const time = getTimeFromY(y, canvas.parentElement!)
+    const time = getTimeFromY(y, canvas!, duration.value)
     if (time === null) return null
 
     // 查找包含该时间点的区域
     for (const [id, region] of regions.value.entries()) {
-      const startY = (region.start / duration.value) * (canvas.height - PADDING * 2) + PADDING
-      const endY = (region.end / duration.value) * (canvas.height - PADDING * 2) + PADDING
+      const startY = getYFromTime(region.start, canvas!, duration.value)
+      const endY = getYFromTime(region.end, canvas!, duration.value)
       
       // 检查是否点击了手柄
       if (Math.abs(y - startY) <= HANDLE_SIZE) {
@@ -451,8 +462,8 @@ export function useAudioVisualizer() {
   const initialize = async (
     container: HTMLElement, 
     audioFile: AudioFile, 
-    onRegionClickHandler?: (id: string) => void,
-    onAnnotationChangeHandler?: (annotation: { id: string; start: number; end: number; text?: string }) => void
+    onRegionClickHandler?: RegionClickHandler,
+    onAnnotationChangeHandler?: AnnotationChangeHandler
   ) => {
     // 创建音频元素
     audioElement.value = new Audio()
@@ -553,7 +564,7 @@ export function useAudioVisualizer() {
       const regionInfo = findRegionAtPosition(y, x)
       if (!regionInfo) {
         // 如果没有点击到任何区域，开始选区
-        const time = getTimeFromY(y, container)
+        const time = getTimeFromY(y, canvas!, duration.value)
         if (time === null) return
         isDragging.value = true
         selectionStart.value = time
@@ -586,7 +597,7 @@ export function useAudioVisualizer() {
       const rect = canvas.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
       const x = e.clientX - rect.left
-      const time = getTimeFromY(y, container)
+      const time = getTimeFromY(y, canvas!, duration.value)
       if (time === null) return
 
       // 检查是否在按钮上
@@ -695,7 +706,7 @@ export function useAudioVisualizer() {
       const clickDuration = Date.now() - clickStartTime
       const rect = canvas.getBoundingClientRect()
       const y = e.clientY - rect.top + container.scrollTop
-      const time = getTimeFromY(y, container)
+      const time = getTimeFromY(y, canvas!, duration.value)
       
       isDragging.value = false
       
@@ -833,13 +844,6 @@ export function useAudioVisualizer() {
   const seek = (time: number) => {
     if (!audioElement.value) return
     audioElement.value.currentTime = Math.max(0, Math.min(time, duration.value))
-  }
-
-  // 计算时间
-  const getTimeFromY = (y: number, container: HTMLElement) => {
-    if (y < PADDING || y > canvas!.height - PADDING) return null
-    const percentage = (y - PADDING) / (canvas!.height - PADDING * 2)
-    return percentage * duration.value
   }
 
   // 绘制选中区域
