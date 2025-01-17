@@ -8,13 +8,14 @@ import type {
   ButtonClickHandler
 } from '~/types/audio'
 import {
-  PADDING,
-  TIME_AXIS_WIDTH,
-  WAVEFORM_WIDTH,
+  TIME_AXIS_HEIGHT,
+  WAVEFORM_HEIGHT,
+  ANNOTATION_HEIGHT,
   HANDLE_SIZE,
-  BUTTON_SIZE
+  BUTTON_SIZE,
+  BUTTON_GAP
 } from '~/constants/visualizer'
-import { getTimeFromY } from '~/utils/timeFormat'
+import { getTimeFromX, getXFromTime, getWaveformYRange, getAnnotationYRange } from '~/utils/timeFormat'
 
 export function useInteractionHandler() {
   // 状态
@@ -25,6 +26,8 @@ export function useInteractionHandler() {
   const hoveredRegion = ref<{ id: string; start: number; end: number; text: string } | null>(null)
   const isDraggingAnnotation = ref(false)
   const draggingHandle = ref<'start' | 'end' | null>(null)
+  const dragStartX = ref<number | null>(null)
+  const DRAG_THRESHOLD = 10
 
   // 回调函数
   const onRegionClick = ref<RegionClickHandler | null>(null)
@@ -35,32 +38,46 @@ export function useInteractionHandler() {
 
   // 检查点击位置是否在标注区域内
   const findRegionAtPosition = (
-    y: number,
     x: number,
+    y: number,
     canvas: HTMLCanvasElement,
     duration: number,
     regions: Map<string, Region>
   ): RegionInfo | null => {
-    if (y < PADDING || y > canvas.height - PADDING) return null
+    // 获取波形区域和标注区域的Y坐标范围
+    const [waveformStartY, waveformEndY] = getWaveformYRange()
+    const [annotationStartY, annotationEndY] = getAnnotationYRange()
     
-    const time = getTimeFromY(y, canvas, duration)
+    // 检查是否在波形区域或标注区域内
+    const isInWaveformArea = y >= waveformStartY && y <= waveformEndY
+    const isInAnnotationArea = y >= annotationStartY && y <= annotationEndY
+    if (!isInWaveformArea && !isInAnnotationArea) return null
+    
+    const time = getTimeFromX(x, canvas, duration)
     if (time === null) return null
 
     for (const [id, region] of regions.entries()) {
-      const startY = (region.start / duration) * (canvas.height - PADDING * 2) + PADDING
-      const endY = (region.end / duration) * (canvas.height - PADDING * 2) + PADDING
+      const startX = getXFromTime(region.start, canvas, duration)
+      const endX = getXFromTime(region.end, canvas, duration)
       
       // 增加手柄检测的容差
       const handleTolerance = HANDLE_SIZE * 2
-      if (Math.abs(y - startY) <= handleTolerance) {
-        return { id, isHandle: 'start', isTextArea: false }
-      }
-      if (Math.abs(y - endY) <= handleTolerance) {
-        return { id, isHandle: 'end', isTextArea: false }
+      // 只在波形区域检测手柄
+      if (isInWaveformArea) {
+        if (Math.abs(x - startX) <= handleTolerance) {
+          return { id, isHandle: 'start', isTextArea: false }
+        }
+        if (Math.abs(x - endX) <= handleTolerance) {
+          return { id, isHandle: 'end', isTextArea: false }
+        }
       }
       
       if (time >= region.start && time <= region.end) {
-        return { id, isHandle: null, isTextArea: false }
+        return { 
+          id, 
+          isHandle: null, 
+          isTextArea: isInAnnotationArea 
+        }
       }
     }
     return null
@@ -70,6 +87,7 @@ export function useInteractionHandler() {
   const clearSelection = () => {
     selectionStart.value = null
     selectionEnd.value = null
+    dragStartX.value = null
     selectedRegion.value = null
     return true
   }
@@ -106,79 +124,101 @@ export function useInteractionHandler() {
     seek: (time: number) => void
   ) => {
     const rect = canvas.getBoundingClientRect()
-    const y = e.clientY - rect.top + container.scrollTop
     const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
     const clickStartTime = Date.now()
-
-    // 检查是否点击了编辑或删除按钮
-    if (editButtonBounds && hoveredRegion.value) {
-      const { x: bx, y: by, width: bw, height: bh } = editButtonBounds
-      if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-        if (onEditButtonClick.value) {
-          onEditButtonClick.value(hoveredRegion.value.id)
-          clearSelection()
-        }
-        return clickStartTime
-      }
-    }
-
-    if (deleteButtonBounds && hoveredRegion.value) {
-      const { x: bx, y: by, width: bw, height: bh } = deleteButtonBounds
-      if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-        if (onDeleteButtonClick.value) {
-          onDeleteButtonClick.value(hoveredRegion.value.id)
-          clearSelection()
-        }
-        return clickStartTime
-      }
-    }
 
     // 检查是否点击了添加按钮
     if (addButtonBounds) {
       const { x: bx, y: by, width: bw, height: bh } = addButtonBounds
-      if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+      const isClicked = x >= bx && x <= bx + bw && y >= by && y <= by + bh
+      if (isClicked) {
         if (onAddButtonClick.value) {
           onAddButtonClick.value()
-          clearSelection()
+          // 在回调函数执行后再清除选区
+          setTimeout(() => {
+            clearSelection()
+          }, 0)
         }
         return clickStartTime
       }
     }
 
+    // 检查是否点击了编辑或删除按钮
+    if (hoveredRegion.value) {
+      // 检查编辑按钮
+      if (editButtonBounds) {
+        const { x: bx, y: by, width: bw, height: bh } = editButtonBounds
+        if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+          if (onEditButtonClick.value) {
+            onEditButtonClick.value(hoveredRegion.value.id)
+            clearSelection()
+            hoveredRegion.value = null
+          }
+          return clickStartTime
+        }
+      }
+
+      // 检查删除按钮
+      if (deleteButtonBounds) {
+        const { x: bx, y: by, width: bw, height: bh } = deleteButtonBounds
+        if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+          if (onDeleteButtonClick.value) {
+            onDeleteButtonClick.value(hoveredRegion.value.id)
+            clearSelection()
+            hoveredRegion.value = null
+          }
+          return clickStartTime
+        }
+      }
+    }
+
     // 检查是否点击了标注区域
-    const regionInfo = findRegionAtPosition(y, x, canvas, duration, regions)
-    if (!regionInfo) {
-      const time = getTimeFromY(y, canvas, duration)
-      if (time === null) return clickStartTime
-      clearSelection()
+    const regionInfo = findRegionAtPosition(x, y, canvas, duration, regions)
+    const [waveformStartY, waveformEndY] = getWaveformYRange()
+    const isInWaveformArea = y >= waveformStartY && y <= waveformEndY
+
+    if (regionInfo) {
+      const region = regions.get(regionInfo.id)
+      if (region) {
+        if (regionInfo.isTextArea) {
+          clearSelection()
+          seek(region.start)
+          return clickStartTime
+        }
+
+        // 检查是否点击了手柄
+        const startX = getXFromTime(region.start, canvas, duration)
+        const endX = getXFromTime(region.end, canvas, duration)
+
+        if (isInWaveformArea) {
+          if (Math.abs(x - startX) <= HANDLE_SIZE) {
+            isDraggingAnnotation.value = true
+            draggingHandle.value = 'start'
+            hoveredRegion.value = { id: regionInfo.id, ...region }
+            return clickStartTime
+          } else if (Math.abs(x - endX) <= HANDLE_SIZE) {
+            isDraggingAnnotation.value = true
+            draggingHandle.value = 'end'
+            hoveredRegion.value = { id: regionInfo.id, ...region }
+            return clickStartTime
+          }
+        }
+      }
+    }
+
+    // 在波形区域创建选区
+    const time = getTimeFromX(x, canvas, duration)
+    if (time === null) return clickStartTime
+
+    if (isInWaveformArea) {
+      dragStartX.value = x
       isDragging.value = true
       selectionStart.value = time
       selectionEnd.value = time
       selectedRegion.value = null
-      return clickStartTime
     }
 
-    // 如果点击了手柄，开始拖动
-    if (regionInfo.isHandle) {
-      const region = regions.get(regionInfo.id)
-      if (region) {
-        clearSelection()
-        isDraggingAnnotation.value = true
-        draggingHandle.value = regionInfo.isHandle
-        hoveredRegion.value = { id: regionInfo.id, ...region }
-        if (onAnnotationChange.value) {
-          onAnnotationChange.value({ id: regionInfo.id, ...region })
-        }
-      }
-      return clickStartTime
-    }
-
-    // 如果点击了标注区域本身，跳转到开始时间
-    const region = regions.get(regionInfo.id)
-    if (region) {
-      clearSelection()
-      seek(region.start)
-    }
     return clickStartTime
   }
 
@@ -194,161 +234,201 @@ export function useInteractionHandler() {
     deleteButtonBounds: ButtonBounds | null
   ) => {
     const rect = canvas.getBoundingClientRect()
-    const y = e.clientY - rect.top + container.scrollTop
     const x = e.clientX - rect.left
-    const time = getTimeFromY(y, canvas, duration)
+    const y = e.clientY - rect.top
+    const time = getTimeFromX(x, canvas, duration)
     if (time === null) return
+
+    // 获取波形和标注区域的Y坐标范围
+    const [waveformStartY, waveformEndY] = getWaveformYRange()
+    const [annotationStartY, annotationEndY] = getAnnotationYRange()
+    const isInWaveformArea = y >= waveformStartY && y <= waveformEndY
+    const isInAnnotationArea = y >= annotationStartY && y <= annotationEndY
 
     // 检查是否在按钮上
     let isOnButton = false
+
+    // 检查添加按钮（仅在有选区时）
+    if (selectionStart.value !== null && selectionEnd.value !== null && addButtonBounds) {
+      const { x: bx, y: by, width: bw, height: bh } = addButtonBounds
+      if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+        canvas.style.cursor = 'pointer'
+        isOnButton = true
+        return { type: 'hover', data: null }
+      }
+    }
 
     // 检查编辑和删除按钮（仅在有悬停区域时）
     if (hoveredRegion.value) {
       // 检查编辑按钮
       if (editButtonBounds) {
         const { x: bx, y: by, width: bw, height: bh } = editButtonBounds
-        if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+        const isOnEditButton = x >= bx && x <= bx + bw && y >= by && y <= by + bh
+        if (isOnEditButton) {
           canvas.style.cursor = 'pointer'
           isOnButton = true
+          return { type: 'hover', data: hoveredRegion.value }
         }
       }
       
       // 检查删除按钮
       if (!isOnButton && deleteButtonBounds) {
         const { x: bx, y: by, width: bw, height: bh } = deleteButtonBounds
-        if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
+        const isOnDeleteButton = x >= bx && x <= bx + bw && y >= by && y <= by + bh
+        if (isOnDeleteButton) {
           canvas.style.cursor = 'pointer'
           isOnButton = true
+          return { type: 'hover', data: hoveredRegion.value }
         }
-      }
-    }
-
-    // 检查添加按钮（仅在有选区时）
-    if (!isOnButton && selectionStart.value !== null && selectionEnd.value !== null && addButtonBounds) {
-      const { x: bx, y: by, width: bw, height: bh } = addButtonBounds
-      if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
-        canvas.style.cursor = 'pointer'
-        isOnButton = true
       }
     }
 
     // 更新鼠标样式
-    const isInWaveformArea = x >= TIME_AXIS_WIDTH && x <= TIME_AXIS_WIDTH + WAVEFORM_WIDTH
-    if (isInWaveformArea && !isOnButton) {
+    if (!isOnButton) {
       if (isDraggingAnnotation.value) {
-        canvas.style.cursor = 'ns-resize'
-      } else {
+        canvas.style.cursor = 'ew-resize'
+      } else if (isInWaveformArea) {
         // 检查是否在手柄上
         let isOnHandle = false
         for (const [id, region] of regions.entries()) {
-          const startY = (region.start / duration) * (canvas.height - PADDING * 2) + PADDING
-          const endY = (region.end / duration) * (canvas.height - PADDING * 2) + PADDING
+          const startX = getXFromTime(region.start, canvas, duration)
+          const endX = getXFromTime(region.end, canvas, duration)
           
-          if (Math.abs(y - startY) <= HANDLE_SIZE || Math.abs(y - endY) <= HANDLE_SIZE) {
-            canvas.style.cursor = 'ns-resize'
+          if (Math.abs(x - startX) <= HANDLE_SIZE || Math.abs(x - endX) <= HANDLE_SIZE) {
+            canvas.style.cursor = 'ew-resize'
             isOnHandle = true
             break
           }
         }
+        
         if (!isOnHandle) {
           canvas.style.cursor = 'default'
         }
+      } else {
+        canvas.style.cursor = 'default'
       }
-    } else if (!isOnButton) {
-      canvas.style.cursor = 'default'
     }
 
-    // 处理拖动和选区
-    if (isDraggingAnnotation.value && draggingHandle.value && hoveredRegion.value) {
-      // 更新标注边界
-      const newAnnotation = { ...hoveredRegion.value }
-      if (draggingHandle.value === 'start') {
-        newAnnotation.start = Math.min(time, newAnnotation.end)
-      } else {
-        newAnnotation.end = Math.max(time, newAnnotation.start)
-      }
-      hoveredRegion.value = newAnnotation
-      if (onAnnotationChange.value) {
-        onAnnotationChange.value(newAnnotation)
-      }
-      return { type: 'annotation', data: newAnnotation }
-    } else if (isDragging.value) {
-      // 更新选区
-      selectionEnd.value = time
-      return { type: 'selection', data: null }
-    } else {
-      // 处理悬停效果
-      let found = false
-      for (const [id, region] of regions.entries()) {
-        if (time >= region.start && time <= region.end) {
-          hoveredRegion.value = { id, ...region }
-          found = true
-          break
+    // 处理拖动
+    if (isDragging.value) {
+      if (dragStartX.value !== null) {
+        const dragDistance = Math.abs(x - dragStartX.value)
+        if (dragDistance >= DRAG_THRESHOLD) {
+          selectionEnd.value = time
+          // 更新选区
+          if (selectionStart.value !== null) {
+            selectedRegion.value = {
+              start: Math.min(selectionStart.value, time),
+              end: Math.max(selectionStart.value, time)
+            }
+          }
+          return { type: 'selection', data: null }
         }
       }
-      if (!found) {
-        hoveredRegion.value = null
+      return
+    }
+
+    // 处理标注拖动
+    if (isDraggingAnnotation.value && hoveredRegion.value) {
+      const region = { ...hoveredRegion.value }
+      if (draggingHandle.value === 'start') {
+        region.start = Math.min(time, region.end)
+      } else if (draggingHandle.value === 'end') {
+        region.end = Math.max(time, region.start)
       }
+      return { type: 'annotation', data: region }
+    }
+
+    // 更新悬停区域
+    const regionInfo = findRegionAtPosition(x, y, canvas, duration, regions)
+    if (regionInfo) {
+      const region = regions.get(regionInfo.id)
+      if (region && (!hoveredRegion.value || hoveredRegion.value.id !== regionInfo.id)) {
+        hoveredRegion.value = { id: regionInfo.id, ...region }
+        return { type: 'hover', data: hoveredRegion.value }
+      }
+    } else if (hoveredRegion.value) {
+      hoveredRegion.value = null
       return { type: 'hover', data: null }
     }
+
+    return null
   }
 
   // 处理鼠标抬起事件
   const handleMouseUp = (
     e: MouseEvent,
     canvas: HTMLCanvasElement,
-    container: HTMLElement,
     duration: number,
-    clickStartTime: number,
-    seek: (time: number) => void
+    seek?: (time: number) => void
   ) => {
-    if (isDraggingAnnotation.value && hoveredRegion.value) {
-      const finalAnnotation = hoveredRegion.value
-      clearInteractionState()
-      return { type: 'annotation', data: finalAnnotation }
-    }
-    
-    if (!isDragging.value) return null
-    
-    const clickDuration = Date.now() - clickStartTime
     const rect = canvas.getBoundingClientRect()
-    const y = e.clientY - rect.top + container.scrollTop
-    const time = getTimeFromY(y, canvas, duration)
+    const x = e.clientX - rect.left
     
-    isDragging.value = false
-    
-    if (clickDuration < 200 && selectionStart.value !== null && Math.abs(selectionStart.value - (time || 0)) < 0.1) {
-      // 这是一个点击事件
-      clearAll()
-      if (time !== null) {
-        seek(time)
+    if (isDragging.value) {
+      if (dragStartX.value !== null) {
+        const dragDistance = Math.abs(x - dragStartX.value)
+        if (dragDistance < DRAG_THRESHOLD) {
+          // 视为单击，移动播放条到点击位置
+          const time = getTimeFromX(x, canvas, duration)
+          if (time !== null && seek) {
+            seek(time)
+          }
+          clearSelection()
+        } else {
+          // 正常的选区拖动结束处理
+          if (selectionStart.value !== null && 
+              selectionEnd.value !== null) {
+            if (Math.abs(selectionEnd.value - selectionStart.value) < 0.1) {
+              clearSelection()
+            } else {
+              // 更新最终的选区
+              selectedRegion.value = {
+                start: Math.min(selectionStart.value, selectionEnd.value),
+                end: Math.max(selectionStart.value, selectionEnd.value)
+              }
+            }
+          }
+        }
       }
-      return { type: 'click', data: null }
-    } else if (selectionStart.value !== null && time !== null) {
-      // 这是一个拖拽事件
-      selectedRegion.value = {
-        start: Math.min(selectionStart.value, time),
-        end: Math.max(selectionStart.value, time)
-      }
-      clearInteractionState()
-      return { type: 'selection', data: selectedRegion.value }
+      isDragging.value = false
+      dragStartX.value = null
+      return { type: 'selection', data: null }
     }
+
+    if (isDraggingAnnotation.value && hoveredRegion.value && draggingHandle.value) {
+      const time = getTimeFromX(x, canvas, duration)
+      if (time !== null) {
+        const updatedRegion = { ...hoveredRegion.value }
+        if (draggingHandle.value === 'start') {
+          updatedRegion.start = Math.min(time, updatedRegion.end)
+        } else if (draggingHandle.value === 'end') {
+          updatedRegion.end = Math.max(time, updatedRegion.start)
+        }
+        // 清理拖动状态
+        isDraggingAnnotation.value = false
+        draggingHandle.value = null
+        return { type: 'annotation', data: updatedRegion }
+      }
+    }
+    
+    // 清理拖动状态
+    isDraggingAnnotation.value = false
+    draggingHandle.value = null
     return null
   }
 
   // 处理鼠标离开事件
   const handleMouseLeave = (canvas: HTMLCanvasElement) => {
     canvas.style.cursor = 'default'
-    if (isDragging.value || isDraggingAnnotation.value) {
-      clearAll()
+    if (hoveredRegion.value) {
+      hoveredRegion.value = null
       return true
     }
-    clearInteractionState()
     return false
   }
 
   return {
-    // 状态
     isDragging,
     selectionStart,
     selectionEnd,
@@ -356,20 +436,15 @@ export function useInteractionHandler() {
     hoveredRegion,
     isDraggingAnnotation,
     draggingHandle,
-
-    // 回调设置
     onRegionClick,
     onAnnotationChange,
     onAddButtonClick,
     onEditButtonClick,
     onDeleteButtonClick,
-
-    // 事件处理方法
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
     handleMouseLeave,
-    findRegionAtPosition,
     clearSelection,
     clearAll,
     clearInteractionState

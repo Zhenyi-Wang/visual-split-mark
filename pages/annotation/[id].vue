@@ -215,6 +215,63 @@ const handleDecreaseRate = () => {
   setPlaybackRate(newRate)
 }
 
+// 添加标注处理函数
+const handleAddAnnotation = () => {
+  if (selectedRegion.value) {
+    const annotation: Annotation = {
+      id: crypto.randomUUID(),
+      audioFileId: currentAudioFile.value?.id || '',
+      start: selectedRegion.value.start,
+      end: selectedRegion.value.end,
+      text: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+    
+    // 添加新标注
+    projectStore.updateAnnotation(annotation)
+    
+    // 显示文本输入框
+    pendingAnnotation.value = annotation
+    annotationText.value = ''
+    showTextInputModal.value = true
+  }
+}
+
+// 监听文本输入框的显示状态
+watch(showTextInputModal, (newValue) => {
+  if (!newValue && pendingAnnotation.value) {
+    // 如果关闭了文本输入框，且没有输入文本，则删除标注
+    if (!annotationText.value) {
+      projectStore.deleteAnnotation(pendingAnnotation.value.id)
+    }
+    pendingAnnotation.value = null
+    annotationText.value = ''
+  }
+})
+
+// 设置按钮回调函数
+const setupButtonCallbacks = () => {
+  // 设置按钮点击回调
+  onAddButtonClick.value = handleAddAnnotation
+  onEditButtonClick.value = (id) => {
+    const annotation = annotations.value.find(a => a.id === id)
+    if (annotation) {
+      pendingAnnotation.value = annotation
+      annotationText.value = annotation.text
+      showTextInputModal.value = true
+    }
+  }
+  onDeleteButtonClick.value = (id) => {
+    const annotation = annotations.value.find(a => a.id === id)
+    if (annotation) {
+      annotationToDelete.value = annotation
+      showDeleteModal.value = true
+    }
+  }
+}
+
+
 // 初始化函数
 const initializeVisualizer = async () => {
   if (isInitialized.value || !waveformRef.value) return
@@ -250,8 +307,9 @@ const initializeVisualizer = async () => {
     annotations.value.forEach(annotation => {
       addRegion(annotation)
     })
+    // 设置按钮回调
+    setupButtonCallbacks()
   } catch (error) {
-    console.error('Failed to initialize audio visualizer:', error)
     message.error('音频加载失败')
   }
 }
@@ -292,26 +350,9 @@ onMounted(async () => {
       annotations.value.forEach(annotation => {
         addRegion(annotation)
       })
-
-      // 设置按钮点击回调
-      onAddButtonClick.value = handleAddAnnotation
-      onEditButtonClick.value = (id) => {
-        const annotation = annotations.value.find(a => a.id === id)
-        if (annotation) {
-          pendingAnnotation.value = annotation
-          annotationText.value = annotation.text
-          showTextInputModal.value = true
-        }
-      }
-      onDeleteButtonClick.value = (id) => {
-        const annotation = annotations.value.find(a => a.id === id)
-        if (annotation) {
-          annotationToDelete.value = annotation
-          showDeleteModal.value = true
-        }
-      }
+      // 设置按钮回调
+      setupButtonCallbacks()
     } catch (error) {
-      console.error('Failed to initialize audio visualizer:', error)
       message.error('音频加载失败')
     }
   }
@@ -393,7 +434,6 @@ const handleConfirmDelete = async () => {
     showDeleteModal.value = false
     message.success('标注已删除')
   } catch (error) {
-    console.error('Failed to delete annotation:', error)
     message.error('删除失败')
   }
 }
@@ -439,7 +479,6 @@ const handleTranscribe = async () => {
     }
     message.success('文本识别完成')
   } catch (error) {
-    console.error('Failed to transcribe:', error)
     message.error('文本识别失败')
   } finally {
     transcribing.value = false
@@ -453,7 +492,6 @@ const handleExport = async () => {
     await exportAnnotations(currentAudioFile.value)
     message.success('导出成功')
   } catch (error) {
-    console.error('Failed to export:', error)
     message.error('导出失败')
   } finally {
     exporting.value = false
@@ -465,7 +503,6 @@ const saveToStorage = async () => {
   try {
     await projectStore.saveAll()
   } catch (error) {
-    console.error('Failed to save:', error)
     message.error('保存失败')
   }
 }
@@ -506,23 +543,6 @@ const handleZoomIn = () => {
 
 const handleZoomOut = () => {
   zoomOut()
-}
-
-const handleAddAnnotation = () => {
-  if (!selectedRegion.value) return
-  const annotation: Annotation = {
-    id: crypto.randomUUID(),
-    audioFileId: currentAudioFile.value?.id || '',
-    start: Number(selectedRegion.value.start.toFixed(2)),
-    end: Number(selectedRegion.value.end.toFixed(2)),
-    text: '',
-    whisperText: '',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }
-  pendingAnnotation.value = annotation
-  annotationText.value = ''
-  showTextInputModal.value = true
 }
 
 // 监听标注列表的变化
@@ -629,12 +649,13 @@ const exportAnnotations = async (audioFile: AudioFile) => {
   border-radius: 4px;
   position: relative;
   overflow: auto;
+  height: 100%;
 }
 
 .waveform {
   position: relative;
   width: 100%;
-  min-height: 100%;
+  height: 100%;
 }
 
 .annotations-container,

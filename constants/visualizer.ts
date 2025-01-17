@@ -1,14 +1,20 @@
 // 布局常量
-export const PADDING = 30 // 上下内边距
-export const TIME_AXIS_WIDTH = 50 // 时间轴宽度
-export const WAVEFORM_WIDTH = 300 // 波形区域宽度
+export const PADDING = 20 // 内边距
+export const TIME_AXIS_HEIGHT = 40 // 时间轴高度
+export const WAVEFORM_HEIGHT = 200 // 波形区域高度
+export const ANNOTATION_HEIGHT = 160 // 标注区域高度（增加高度）
+export const TOTAL_HEIGHT = TIME_AXIS_HEIGHT + WAVEFORM_HEIGHT + ANNOTATION_HEIGHT // 总高度
+
+// 旧的布局常量（过渡期保留）
+export const TIME_AXIS_WIDTH = 50 // 时间轴宽度（已废弃）
+export const WAVEFORM_WIDTH = 300 // 波形区域宽度（已废弃）
 
 // 交互元素尺寸
 export const HANDLE_SIZE = 4 // 拖拽手柄触发区域大小
 export const HANDLE_VISUAL_SIZE = 6 // 拖拽手柄视觉大小
-export const BUTTON_SIZE = 32 // 按钮尺寸
+export const BUTTON_SIZE = 16 // 按钮尺寸（调小一点更合适横向布局）
 export const BUTTON_PADDING = 8 // 按钮内边距
-export const BUTTON_GAP = 8 // 按钮间距
+export const BUTTON_GAP = 5 // 按钮间距
 
 // 缩放相关
 export const MIN_PIXELS_PER_SECOND = 1 // 最小缩放比例

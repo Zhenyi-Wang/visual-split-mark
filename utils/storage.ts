@@ -26,7 +26,6 @@ export const storage = {
         body: data
       })
     } catch (error) {
-      console.error('Failed to save data:', error)
       throw error
     }
   },
@@ -41,7 +40,6 @@ export const storage = {
       }>('/api/data/load')
       return response
     } catch (error) {
-      console.error('Failed to load data:', error)
       return {
         projects: [],
         audioFiles: [],

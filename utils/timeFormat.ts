@@ -1,4 +1,4 @@
-import { PADDING } from '~/constants/visualizer'
+import { PADDING, TIME_AXIS_HEIGHT, WAVEFORM_HEIGHT, ANNOTATION_HEIGHT } from '~/constants/visualizer'
 
 /**
  * 格式化时间轴显示
@@ -55,4 +55,49 @@ export const formatPlayTime = (time: number): string => {
   const seconds = Math.floor(time % 60)
   const milliseconds = Math.floor((time % 1) * 100)
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(2, '0')}`
+}
+
+/**
+ * 从X坐标计算时间点
+ * @param x X坐标
+ * @param canvas Canvas元素
+ * @param duration 音频总时长
+ * @returns 时间点（秒）或null
+ */
+export const getTimeFromX = (x: number, canvas: HTMLCanvasElement, duration: number): number | null => {
+  if (x < PADDING || x > canvas.width - PADDING) return null
+  const percentage = (x - PADDING) / (canvas.width - PADDING * 2)
+  return percentage * duration
+}
+
+/**
+ * 从时间点计算X坐标
+ * @param time 时间点（秒）
+ * @param canvas Canvas元素
+ * @param duration 音频总时长
+ * @returns X坐标
+ */
+export const getXFromTime = (time: number, canvas: HTMLCanvasElement, duration: number): number => {
+  const percentage = time / duration
+  return percentage * (canvas.width - PADDING * 2) + PADDING
+}
+
+/**
+ * 获取波形图区域的Y坐标范围
+ * @returns [startY, endY]
+ */
+export const getWaveformYRange = (): [number, number] => {
+  const startY = TIME_AXIS_HEIGHT
+  const endY = startY + WAVEFORM_HEIGHT
+  return [startY, endY]
+}
+
+/**
+ * 获取标注区域的Y坐标范围
+ * @returns [startY, endY]
+ */
+export const getAnnotationYRange = (): [number, number] => {
+  const startY = TIME_AXIS_HEIGHT + WAVEFORM_HEIGHT
+  const endY = startY + ANNOTATION_HEIGHT
+  return [startY, endY]
 } 

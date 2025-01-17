@@ -1,8 +1,6 @@
 export const uploader = {
   async saveFile(file: File, path: string, progressCallback?: (progress: number) => void): Promise<void> {
     try {
-      console.log('Saving file to:', path, 'size:', file.size, 'bytes')
-      
       // 读取文件数据
       const arrayBuffer = await file.arrayBuffer()
       const uint8Array = new Uint8Array(arrayBuffer)
@@ -30,10 +28,7 @@ export const uploader = {
           progressCallback((i + 1) / totalChunks)
         }
       }
-      
-      console.log('File saved successfully')
     } catch (error) {
-      console.error('Error saving file:', error)
       throw new Error(`Failed to save file: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
