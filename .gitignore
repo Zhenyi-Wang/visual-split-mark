@@ -24,5 +24,4 @@ logs
 !.env.example
 
 # Project specific
-storage/
-.scratchpad
+storage/*
