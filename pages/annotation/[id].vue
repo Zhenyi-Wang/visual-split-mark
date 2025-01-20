@@ -228,9 +228,6 @@ const handleAddAnnotation = () => {
       updatedAt: new Date()
     }
     
-    // 添加新标注
-    projectStore.updateAnnotation(annotation)
-    
     // 显示文本输入框
     pendingAnnotation.value = annotation
     annotationText.value = ''
@@ -517,10 +514,13 @@ const handleConfirmAnnotation = async () => {
     updatedAt: new Date()
   }
   
+  const isNewAnnotation = !annotations.value.find(a => a.id === annotation.id)
+  
+  // 更新标注
   await projectStore.updateAnnotation(annotation)
   await saveToStorage() // 自动保存
   
-  if (pendingAnnotation.value.text === '') {
+  if (isNewAnnotation) {
     // 如果是新建标注
     addRegion(annotation)
     message.success('标注已添加')
