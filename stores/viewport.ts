@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { DEFAULT_PIXELS_PER_SECOND, INITIAL_VIEWPORT_WIDTH } from '~/constants/visualizer'
 
 export const useViewportStore = defineStore('viewport', () => {
   // 状态
@@ -13,9 +14,14 @@ export const useViewportStore = defineStore('viewport', () => {
   // Actions
   function setDuration(newDuration: number) {
     duration.value = newDuration
-    // 初始化显示前30秒，或者全部如果时长小于30秒
+    
+    // 根据初始渲染宽度和默认像素/秒比例计算显示时长
+    const initialViewDuration = INITIAL_VIEWPORT_WIDTH / DEFAULT_PIXELS_PER_SECOND
+    
+    // 如果音频时长小于计算出的显示时长，显示全部
+    // 否则显示计算出的时长
     startTime.value = 0
-    endTime.value = Math.min(30, newDuration)
+    endTime.value = Math.min(newDuration, initialViewDuration)
   }
 
   function setViewport(start: number, end: number) {

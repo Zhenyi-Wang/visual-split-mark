@@ -82,7 +82,7 @@
                 v-model:value="viewportStartPercent"
                 :min="0"
                 :max="maxStartPercent"
-                :step="5"
+                :step="1"
                 size="small"
                 style="width: 80px;"
               />
@@ -92,7 +92,7 @@
                 v-model:value="viewportEndPercent"
                 :min="minEndPercent"
                 :max="100"
-                :step="5"
+                :step="1"
                 size="small"
                 style="width: 80px;"
               />
@@ -160,10 +160,6 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const message = useMessage()
 const viewport = useViewportStore()
-console.log(viewport)
-setTimeout(() => {
-  console.log('11',viewport)
-}, 5000)
 // 添加缺失的响应式变量
 const transcribing = ref(false)
 const exporting = ref(false)
@@ -650,8 +646,13 @@ const viewportEndPercent = computed({
 })
 
 // 修改范围限制
-const maxStartPercent = computed(() => Math.round((viewport.endTime / duration.value) * 100) - 5)
-const minEndPercent = computed(() => Math.round((viewport.startTime / duration.value) * 100) + 5)
+const maxStartPercent = computed(() => {
+  return Math.min(viewportEndPercent.value - 1, 99)
+})
+
+const minEndPercent = computed(() => {
+  return Math.max(viewportStartPercent.value + 1, 1)
+})
 </script>
 
 <style scoped>

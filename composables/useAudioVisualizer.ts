@@ -45,25 +45,14 @@ export function useAudioVisualizer() {
   ) => {
     // 初始化音频播放器
     const channelData = await audioPlayer.initialize(audioFile)
-    console.log('Audio initialized:', {
-      duration: audioPlayer.duration.value,
-      channelData: channelData?.length
-    })
     
     // 初始化波形绘制器
     waveformDrawer.initialize(container)
-    console.log('Drawer initialized')
     
     // 设置持续时间，这会自动初始化视口范围为前30秒
     viewport.setDuration(audioPlayer.duration.value)
-    console.log('Duration set:', {
-      duration: audioPlayer.duration.value,
-      viewStart: viewport.startTime,
-      viewEnd: viewport.endTime
-    })
     
     waveformDrawer.setChannelData(channelData)
-    console.log('Channel data set')
 
     // 设置回调函数
     interactionHandler.onRegionClick.value = onRegionClickHandler || null

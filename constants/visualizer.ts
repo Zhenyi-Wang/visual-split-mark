@@ -20,6 +20,7 @@ export const BUTTON_GAP = 5 // 按钮间距
 export const MIN_PIXELS_PER_SECOND = 1 // 最小缩放比例
 export const MAX_PIXELS_PER_SECOND = 500 // 最大缩放比例
 export const DEFAULT_PIXELS_PER_SECOND = 50 // 默认缩放比例
+export const INITIAL_VIEWPORT_WIDTH = 1000 // 初始视口宽度（像素）
 
 // 播放速度
 export const MIN_PLAYBACK_RATE = 0.5 // 最小播放速度

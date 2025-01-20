@@ -22,7 +22,6 @@ async function copyFFmpegFiles() {
       join(targetDir, 'ffmpeg-core.wasm')
     )
 
-    console.log('FFmpeg files copied successfully')
   } catch (error) {
     console.error('Failed to copy FFmpeg files:', error)
     process.exit(1)
