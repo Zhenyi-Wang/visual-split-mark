@@ -257,9 +257,7 @@ const setupButtonCallbacks = () => {
   onEditButtonClick.value = (id) => {
     const annotation = annotations.value.find(a => a.id === id)
     if (annotation) {
-      pendingAnnotation.value = annotation
-      annotationText.value = annotation.text
-      showTextInputModal.value = true
+      handleEditAnnotation(annotation)
     }
   }
   onDeleteButtonClick.value = (id) => {
