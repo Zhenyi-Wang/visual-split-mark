@@ -240,23 +240,12 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     currentStatus.value = '转换格式'
     uploadProgress.value = 0
 
-    // 启动模拟进度
-    let increment = 1
-    convertingTimer.value = setInterval(() => {
-      if (uploadProgress.value < 95) {
-        // 进度越大，增量越小
-        if (uploadProgress.value < 30) {
-          increment = 2
-        } else if (uploadProgress.value < 60) {
-          increment = 1
-        } else if (uploadProgress.value < 90) {
-          increment = 0.5
-        } else {
-          increment = 0.2
-        }
-        uploadProgress.value = Math.round((Math.min(95, uploadProgress.value + increment)) * 10) / 10
-      }
-    }, 100)
+    // 创建 SSE 连接
+    const eventSource = new EventSource(`/api/file/convert-progress?fileId=${newAudioFile.id}`)
+    eventSource.onmessage = (event) => {
+      const { progress } = JSON.parse(event.data)
+      uploadProgress.value = Math.round(progress * 10) / 10
+    }
 
     try {
       // 调用服务器端转码 API
@@ -264,7 +253,8 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
         method: 'POST',
         body: {
           inputPath: newAudioFile.originalPath,
-          outputPath: newAudioFile.wavPath
+          outputPath: newAudioFile.wavPath,
+          fileId: newAudioFile.id
         }
       })
       
@@ -273,7 +263,6 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
         ...newAudioFile,
         status: 'ready'
       })
-      uploadProgress.value = 100
       message.success('转码成功')
     } catch (error) {
       console.error('Conversion failed:', error)
@@ -283,11 +272,8 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
       })
       message.error('转码失败')
     } finally {
-      // 清除定时器
-      if (convertingTimer.value) {
-        clearInterval(convertingTimer.value)
-        convertingTimer.value = null
-      }
+      // 关闭 SSE 连接
+      eventSource.close()
       isConverting.value = false
       uploadProgress.value = 0
       currentStatus.value = ''

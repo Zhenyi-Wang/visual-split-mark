@@ -1,65 +1,93 @@
 import { spawn } from 'child_process'
 import { join, dirname } from 'path'
 import { mkdir } from 'fs/promises'
+import { progressEmitter } from './convert-progress'
+
+// 解析 FFmpeg 时间字符串为秒
+function parseTime(timeStr: string): number {
+  const [hours, minutes, seconds] = timeStr.split(':').map(parseFloat)
+  return hours * 3600 + minutes * 60 + seconds
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const { inputPath, outputPath } = await readBody(event)
+    const { inputPath, outputPath, fileId } = await readBody(event)
     
     // 确保输出路径是在 converted 目录下
     const absoluteInputPath = join(process.cwd(), inputPath)
-    const absoluteOutputPath = join(process.cwd(), outputPath.replace('storage/uploads', 'storage/converted'))
+    const absoluteOutputPath = join(process.cwd(), outputPath)
     
     // 确保输出目录存在
     const outputDir = dirname(absoluteOutputPath)
     await mkdir(outputDir, { recursive: true })
-    
-    console.log('Converting file:', {
-      input: absoluteInputPath,
-      output: absoluteOutputPath
+
+    // 获取音频总时长
+    const duration = await new Promise<number>((resolve, reject) => {
+      const ffprobe = spawn('ffprobe', [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        absoluteInputPath
+      ])
+
+      let output = ''
+      ffprobe.stdout.on('data', (data) => {
+        output += data.toString()
+      })
+
+      ffprobe.on('close', (code) => {
+        if (code === 0) {
+          resolve(parseFloat(output.trim()))
+        } else {
+          reject(new Error('Failed to get duration'))
+        }
+      })
     })
     
     return new Promise((resolve, reject) => {
-      // 使用 ffmpeg 命令行工具进行转换
       const ffmpeg = spawn('ffmpeg', [
         '-i', absoluteInputPath,
-        '-ar', '16000',  // 采样率
-        '-ac', '1',      // 单声道
-        '-c:a', 'pcm_s16le',  // 16位 PCM
+        '-progress', 'pipe:1',
+        '-ar', '16000',
+        '-ac', '1',
+        '-c:a', 'pcm_s16le',
         absoluteOutputPath
       ])
 
-      let error = ''
-
-      ffmpeg.stderr.on('data', (data) => {
-        const message = data.toString()
-        console.log('FFmpeg:', message)
-        error += message
+      ffmpeg.stdout.on('data', (data) => {
+        const output = data.toString()
+        const timeMatch = output.match(/time=(\d+:\d+:\d+\.\d+)/)
+        if (timeMatch) {
+          const currentTime = parseTime(timeMatch[1])
+          const progress = Math.min(99.9, (currentTime / duration) * 100)
+          progressEmitter.emit('progress', fileId, progress)
+        }
       })
 
-      ffmpeg.stdout.on('data', (data) => {
-        console.log('FFmpeg output:', data.toString())
+      ffmpeg.stderr.on('data', (data) => {
+        console.log('FFmpeg:', data.toString())
       })
 
       ffmpeg.on('close', (code) => {
-        console.log('FFmpeg process exited with code:', code)
         if (code === 0) {
+          // 发送 100% 进度
+          progressEmitter.emit('progress', fileId, 100)
           resolve({ success: true })
         } else {
-          reject(new Error(`FFmpeg conversion failed: ${error}`))
+          reject(new Error('FFmpeg conversion failed'))
         }
       })
 
       ffmpeg.on('error', (err) => {
         console.error('FFmpeg process error:', err)
-        reject(new Error(`Failed to start FFmpeg: ${err.message}`))
+        reject(new Error('Failed to start FFmpeg'))
       })
     })
   } catch (error) {
-    console.error('Error converting file:', error)
+    console.error('Error in conversion:', error)
     throw createError({
       statusCode: 500,
-      message: `Failed to convert file: ${error instanceof Error ? error.message : String(error)}`
+      message: error instanceof Error ? error.message : 'Conversion failed'
     })
   }
 }) 
