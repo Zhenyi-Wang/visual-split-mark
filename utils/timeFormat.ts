@@ -21,31 +21,6 @@ export const formatTimeAxis = (seconds: number): string => {
 }
 
 /**
- * 从Y坐标计算时间点
- * @param y Y坐标
- * @param canvas Canvas元素
- * @param duration 音频总时长
- * @returns 时间点（秒）或null
- */
-export const getTimeFromY = (y: number, canvas: HTMLCanvasElement, duration: number): number | null => {
-  if (y < PADDING || y > canvas.height - PADDING) return null
-  const percentage = (y - PADDING) / (canvas.height - PADDING * 2)
-  return percentage * duration
-}
-
-/**
- * 从时间点计算Y坐标
- * @param time 时间点（秒）
- * @param canvas Canvas元素
- * @param duration 音频总时长
- * @returns Y坐标
- */
-export const getYFromTime = (time: number, canvas: HTMLCanvasElement, duration: number): number => {
-  const percentage = time / duration
-  return percentage * (canvas.height - PADDING * 2) + PADDING
-}
-
-/**
  * 格式化播放时间显示
  * @param time 时间（秒）
  * @returns 格式化后的时间字符串
@@ -55,31 +30,6 @@ export const formatPlayTime = (time: number): string => {
   const seconds = Math.floor(time % 60)
   const milliseconds = Math.floor((time % 1) * 100)
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(2, '0')}`
-}
-
-/**
- * 从X坐标计算时间点
- * @param x X坐标
- * @param canvas Canvas元素
- * @param duration 音频总时长
- * @returns 时间点（秒）或null
- */
-export const getTimeFromX = (x: number, canvas: HTMLCanvasElement, duration: number): number | null => {
-  if (x < PADDING || x > canvas.width - PADDING) return null
-  const percentage = (x - PADDING) / (canvas.width - PADDING * 2)
-  return percentage * duration
-}
-
-/**
- * 从时间点计算X坐标
- * @param time 时间点（秒）
- * @param canvas Canvas元素
- * @param duration 音频总时长
- * @returns X坐标
- */
-export const getXFromTime = (time: number, canvas: HTMLCanvasElement, duration: number): number => {
-  const percentage = time / duration
-  return percentage * (canvas.width - PADDING * 2) + PADDING
 }
 
 /**

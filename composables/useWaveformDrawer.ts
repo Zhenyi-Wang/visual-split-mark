@@ -1,4 +1,4 @@
-import { ref, readonly } from 'vue'
+import { ref, readonly, computed } from 'vue'
 import type { WaveformDrawer, Region } from '~/types/audio'
 import { useViewportStore } from '~/stores/viewport'
 import {
@@ -16,22 +16,27 @@ import {
   ANNOTATION_HEIGHT,
   TOTAL_HEIGHT
 } from '~/constants/visualizer'
-import { formatTimeAxis, getYFromTime, getXFromTime } from '~/utils/timeFormat'
+import { formatTimeAxis } from '~/utils/timeFormat'
+import { useCoordinateTransform } from './useCoordinateTransform'
 
-interface Props {
-  // 如果有需要的属性，可以在这里添加
-}
-
-export function useWaveformDrawer(props: Props, emit: (event: string, ...args: any[]) => void) {
+export const useWaveformDrawer = () => {
   // 初始化 canvas 和上下文
-  const canvasRef = ref<HTMLCanvasElement | null>(null)
+  const canvas = ref<HTMLCanvasElement | null>(null)
   const canvasCtx = ref<CanvasRenderingContext2D | null>(null)
   const channelData = ref<Float32Array | null>(null)
   const container = ref<HTMLElement | null>(null)
-  const currentTime = ref(0)
 
   // 使用 viewport store
   const viewport = useViewportStore()
+
+  // 创建坐标转换器
+  const createTransform = () => {
+    return useCoordinateTransform({
+      startTime: computed(() => viewport.startTime),
+      endTime: computed(() => viewport.endTime),
+      width: computed(() => canvas.value?.width || 0)
+    })
+  }
 
   // 添加波形数据缓存
   const waveformCache = ref<{
@@ -120,7 +125,9 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
       delete: { x: number; y: number; width: number; height: number } | null;
     }
   ) => {
-    if (!canvasCtx.value || !canvasRef.value || !channelData.value || !container.value) return
+    if (!canvasCtx.value || !canvas.value || !channelData.value || !container.value) return
+
+    const transform = createTransform()
 
     // 使用 viewport store 的时间范围
     const visibleDuration = viewport.viewDuration
@@ -128,19 +135,19 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     const actualWidth = Math.max(totalWidth, container.value.clientWidth)
     
     // 设置 Canvas 的尺寸
-    canvasRef.value.width = actualWidth
-    canvasRef.value.height = container.value.clientHeight
-    canvasRef.value.style.width = `${actualWidth}px`
-    canvasRef.value.style.height = `${container.value.clientHeight}px`
+    canvas.value.width = actualWidth
+    canvas.value.height = container.value.clientHeight
+    canvas.value.style.width = `${actualWidth}px`
+    canvas.value.style.height = `${container.value.clientHeight}px`
 
     // 计算各区域高度
     const timeAxisHeight = TIME_AXIS_HEIGHT
     const waveformHeight = WAVEFORM_HEIGHT
-    const annotationHeight = canvasRef.value.height - timeAxisHeight - waveformHeight
+    const annotationHeight = canvas.value.height - timeAxisHeight - waveformHeight
 
     // 清除画布
     canvasCtx.value.fillStyle = '#fff'
-    canvasCtx.value.fillRect(0, 0, canvasRef.value.width, canvasRef.value.height)
+    canvasCtx.value.fillRect(0, 0, canvas.value.width, canvas.value.height)
 
     // 绘制时间轴
     drawTimeAxis(viewport.startTime, viewport.endTime, pixelsPerSecond)
@@ -150,7 +157,7 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     canvasCtx.value.fillRect(
       PADDING,
       timeAxisHeight,
-      canvasRef.value.width - PADDING * 2,
+      canvas.value.width - PADDING * 2,
       waveformHeight
     )
 
@@ -159,7 +166,7 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     canvasCtx.value.fillRect(
       PADDING,
       timeAxisHeight + waveformHeight,
-      canvasRef.value.width - PADDING * 2,
+      canvas.value.width - PADDING * 2,
       annotationHeight
     )
 
@@ -168,13 +175,13 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     canvasCtx.value.strokeStyle = '#ccc'
     canvasCtx.value.lineWidth = 1
     canvasCtx.value.moveTo(PADDING, timeAxisHeight + waveformHeight)
-    canvasCtx.value.lineTo(canvasRef.value.width - PADDING, timeAxisHeight + waveformHeight)
+    canvasCtx.value.lineTo(canvas.value.width - PADDING, timeAxisHeight + waveformHeight)
     canvasCtx.value.stroke()
 
     // 绘制波形
     const barWidth = 1
     const barGap = 1
-    const viewWidth = canvasRef.value.width - PADDING * 2
+    const viewWidth = canvas.value.width - PADDING * 2
     const totalBars = Math.floor(viewWidth / (barWidth + barGap))
 
     // 检查缓存是否可用
@@ -238,7 +245,7 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
 
     // 绘制进度线
     if (currentTime !== null && currentTime >= viewport.startTime && currentTime <= viewport.endTime) {
-      const progressX = PADDING + (currentTime - viewport.startTime) * pixelsPerSecond
+      const progressX = transform.getXFromTime(currentTime)
       canvasCtx.value.beginPath()
       canvasCtx.value.strokeStyle = COLORS.progress
       canvasCtx.value.lineWidth = 2
@@ -269,13 +276,13 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
 
   // 绘制时间轴
   const drawTimeAxis = (startTime: number, endTime: number, pixelsPerSecond: number) => {
-    if (!canvasCtx.value || !canvasRef.value) return
+    if (!canvasCtx.value || !canvas.value) return
 
     const pixelsPerMinute = pixelsPerSecond * 60
     const duration = endTime - startTime
 
     // 根据缩放级别和可视区域宽度选择合适的时间间隔
-    const viewWidth = canvasRef.value.width - PADDING * 2
+    const viewWidth = canvas.value.width - PADDING * 2
     const minPixelsBetweenTicks = 50 // 刻度之间的最小像素距离
     
     // 计算合适的时间间隔
@@ -356,15 +363,16 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
       delete: { x: number; y: number; width: number; height: number } | null;
     }
   ) => {
-    if (!canvasCtx.value || !canvasRef.value) return
+    if (!canvasCtx.value || !canvas.value) return
 
-    const ctx = canvasCtx.value // 创建引用以避免重复的空值检查
+    const transform = createTransform()
+    const ctx = canvasCtx.value
 
     // 计算各区域高度
     const timeAxisHeight = TIME_AXIS_HEIGHT
     const waveformHeight = WAVEFORM_HEIGHT
-    const annotationHeight = canvasRef.value.height - timeAxisHeight - waveformHeight
-    const viewWidth = canvasRef.value.width - PADDING * 2
+    const annotationHeight = canvas.value.height - timeAxisHeight - waveformHeight
+    const viewWidth = canvas.value.width - PADDING * 2
 
     // 重置所有按钮边界
     buttonBounds.edit = null
@@ -373,7 +381,7 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     // 遍历所有区域，但只绘制可见的部分
     regions.forEach((region, id) => {
       // 检查区域是否在可视范围内
-      if (region.end < viewport.startTime || region.start > viewport.endTime) {
+      if (!transform.isTimeVisible(region.start) && !transform.isTimeVisible(region.end)) {
         return // 跳过不在可视范围内的区域
       }
 
@@ -381,8 +389,8 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
       const isEditing = editingAnnotation?.id === id
 
       // 计算区域在视口中的位置
-      const startX = PADDING + Math.max(0, region.start - viewport.startTime) * pixelsPerSecond
-      const endX = PADDING + Math.min(viewport.endTime - viewport.startTime, region.end - viewport.startTime) * pixelsPerSecond
+      const startX = transform.getXFromTime(region.start)
+      const endX = transform.getXFromTime(region.end)
       const width = endX - startX
 
       // 绘制波形区域背景
@@ -518,14 +526,15 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
       delete: { x: number; y: number; width: number; height: number } | null;
     }
   ) => {
-    if (!canvasCtx.value || !canvasRef.value) return
+    if (!canvasCtx.value || !canvas.value) return
 
+    const transform = createTransform()
     const timeAxisHeight = TIME_AXIS_HEIGHT
     const waveformHeight = WAVEFORM_HEIGHT
 
     // 计算选区的位置和尺寸
-    const startX = getXFromTime(selectionRange.start, canvasRef.value!, duration)
-    const endX = getXFromTime(selectionRange.end, canvasRef.value!, duration)
+    const startX = transform.getXFromTime(selectionRange.start)
+    const endX = transform.getXFromTime(selectionRange.end)
     const width = endX - startX
 
     // 绘制选区背景
@@ -564,34 +573,8 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     }
   }
 
-  function handleMouseMove(e: MouseEvent) {
-    if (!canvasRef.value) return
-
-    const rect = canvasRef.value.getBoundingClientRect()
-    const x = e.clientX - rect.left
-
-    // 使用 viewport 的坐标转换方法
-    const time = viewport.getTimeFromX(x, canvasRef.value.width)
-    
-    // 更新当前时间
-    currentTime.value = time
-  }
-
-  function handleClick(e: MouseEvent) {
-    if (!canvasRef.value) return
-
-    const rect = canvasRef.value.getBoundingClientRect()
-    const x = e.clientX - rect.left
-
-    // 使用 viewport 的坐标转换方法
-    const time = viewport.getTimeFromX(x, canvasRef.value.width)
-    
-    // 触发点击事件
-    emit('click', time)
-  }
-
   return {
-    canvasRef,
+    canvas,
     canvasCtx,
     channelData,
     container,
@@ -603,25 +586,23 @@ export function useWaveformDrawer(props: Props, emit: (event: string, ...args: a
     },
     initialize: (containerElement: HTMLElement) => {
       container.value = containerElement
-      canvasRef.value = document.createElement('canvas')
-      canvasRef.value.style.width = `${containerElement.clientWidth}px`
-      canvasRef.value.style.height = `${containerElement.clientHeight}px`
-      canvasRef.value.width = containerElement.clientWidth
-      canvasRef.value.height = containerElement.clientHeight
-      containerElement.appendChild(canvasRef.value)
-      canvasCtx.value = canvasRef.value.getContext('2d')
+      canvas.value = document.createElement('canvas')
+      canvas.value.style.width = `${containerElement.clientWidth}px`
+      canvas.value.style.height = `${containerElement.clientHeight}px`
+      canvas.value.width = containerElement.clientWidth
+      canvas.value.height = containerElement.clientHeight
+      containerElement.appendChild(canvas.value)
+      canvasCtx.value = canvas.value.getContext('2d')
     },
     cleanup: () => {
-      if (canvasRef.value && container.value) {
-        container.value.removeChild(canvasRef.value)
+      if (canvas.value && container.value) {
+        container.value.removeChild(canvas.value)
       }
-      canvasRef.value = null
+      canvas.value = null
       canvasCtx.value = null
       channelData.value = null
       container.value = null
     },
-    currentTime,
-    handleMouseMove,
-    handleClick,
+    transform: createTransform()
   }
 } 
