@@ -18,12 +18,14 @@ import { useAudioPlayer } from './useAudioPlayer'
 import { useWaveformDrawer } from './useWaveformDrawer'
 import { useInteractionHandler } from './useInteractionHandler'
 import { useRegionManager } from './useRegionManager'
+import { useViewportStore } from '~/stores/viewport'
 
 export function useAudioVisualizer() {
   const audioPlayer = useAudioPlayer()
   const waveformDrawer = useWaveformDrawer()
   const interactionHandler = useInteractionHandler()
   const regionManager = useRegionManager()
+  const viewport = useViewportStore()
   const editingAnnotation = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
   const selectedRegion = ref<{ start: number; end: number } | null>(null)
   const pixelsPerSecond = ref(50)
@@ -43,10 +45,25 @@ export function useAudioVisualizer() {
   ) => {
     // 初始化音频播放器
     const channelData = await audioPlayer.initialize(audioFile)
+    console.log('Audio initialized:', {
+      duration: audioPlayer.duration.value,
+      channelData: channelData?.length
+    })
     
     // 初始化波形绘制器
     waveformDrawer.initialize(container)
+    console.log('Drawer initialized')
+    
+    // 设置持续时间，这会自动初始化视口范围为前30秒
+    viewport.setDuration(audioPlayer.duration.value)
+    console.log('Duration set:', {
+      duration: audioPlayer.duration.value,
+      viewStart: viewport.startTime,
+      viewEnd: viewport.endTime
+    })
+    
     waveformDrawer.setChannelData(channelData)
+    console.log('Channel data set')
 
     // 设置回调函数
     interactionHandler.onRegionClick.value = onRegionClickHandler || null

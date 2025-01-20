@@ -1,5 +1,6 @@
-import { ref } from 'vue'
+import { ref, readonly } from 'vue'
 import type { WaveformDrawer, Region } from '~/types/audio'
+import { useViewportStore } from '~/stores/viewport'
 import {
   PADDING,
   TIME_AXIS_WIDTH,
@@ -17,12 +18,28 @@ import {
 } from '~/constants/visualizer'
 import { formatTimeAxis, getYFromTime, getXFromTime } from '~/utils/timeFormat'
 
-export const useWaveformDrawer = () => {
+interface Props {
+  // 如果有需要的属性，可以在这里添加
+}
+
+export function useWaveformDrawer(props: Props, emit: (event: string, ...args: any[]) => void) {
   // 初始化 canvas 和上下文
-  const canvas = ref<HTMLCanvasElement | null>(null)
+  const canvasRef = ref<HTMLCanvasElement | null>(null)
   const canvasCtx = ref<CanvasRenderingContext2D | null>(null)
   const channelData = ref<Float32Array | null>(null)
   const container = ref<HTMLElement | null>(null)
+  const currentTime = ref(0)
+
+  // 使用 viewport store
+  const viewport = useViewportStore()
+
+  // 添加波形数据缓存
+  const waveformCache = ref<{
+    startTime: number;
+    endTime: number;
+    pixelsPerSecond: number;
+    data: { x: number; y: number; height: number }[];
+  } | null>(null)
 
   // 绘制圆形按钮
   const drawButton = (x: number, y: number, size: number, color: string) => {
@@ -103,36 +120,37 @@ export const useWaveformDrawer = () => {
       delete: { x: number; y: number; width: number; height: number } | null;
     }
   ) => {
-    if (!canvasCtx.value || !canvas.value || !channelData.value || !container.value) return
+    if (!canvasCtx.value || !canvasRef.value || !channelData.value || !container.value) return
 
-    // 根据缩放比例计算总宽度
-    const totalWidth = duration * pixelsPerSecond + PADDING * 2
+    // 使用 viewport store 的时间范围
+    const visibleDuration = viewport.viewDuration
+    const totalWidth = visibleDuration * pixelsPerSecond + PADDING * 2
     const actualWidth = Math.max(totalWidth, container.value.clientWidth)
     
     // 设置 Canvas 的尺寸
-    canvas.value.width = actualWidth
-    canvas.value.height = container.value.clientHeight
-    canvas.value.style.width = `${actualWidth}px`
-    canvas.value.style.height = `${container.value.clientHeight}px`
+    canvasRef.value.width = actualWidth
+    canvasRef.value.height = container.value.clientHeight
+    canvasRef.value.style.width = `${actualWidth}px`
+    canvasRef.value.style.height = `${container.value.clientHeight}px`
 
     // 计算各区域高度
-    const timeAxisHeight = TIME_AXIS_HEIGHT // 固定40px
-    const waveformHeight = WAVEFORM_HEIGHT // 固定200px
-    const annotationHeight = canvas.value.height - timeAxisHeight - waveformHeight // 剩余全部用于标注区域
+    const timeAxisHeight = TIME_AXIS_HEIGHT
+    const waveformHeight = WAVEFORM_HEIGHT
+    const annotationHeight = canvasRef.value.height - timeAxisHeight - waveformHeight
 
     // 清除画布
     canvasCtx.value.fillStyle = '#fff'
-    canvasCtx.value.fillRect(0, 0, canvas.value.width, canvas.value.height)
+    canvasCtx.value.fillRect(0, 0, canvasRef.value.width, canvasRef.value.height)
 
     // 绘制时间轴
-    drawTimeAxis(duration, pixelsPerSecond)
+    drawTimeAxis(viewport.startTime, viewport.endTime, pixelsPerSecond)
 
     // 绘制波形区域背景
     canvasCtx.value.fillStyle = '#fff'
     canvasCtx.value.fillRect(
       PADDING,
       timeAxisHeight,
-      canvas.value.width - PADDING * 2,
+      canvasRef.value.width - PADDING * 2,
       waveformHeight
     )
 
@@ -141,7 +159,7 @@ export const useWaveformDrawer = () => {
     canvasCtx.value.fillRect(
       PADDING,
       timeAxisHeight + waveformHeight,
-      canvas.value.width - PADDING * 2,
+      canvasRef.value.width - PADDING * 2,
       annotationHeight
     )
 
@@ -149,40 +167,78 @@ export const useWaveformDrawer = () => {
     canvasCtx.value.beginPath()
     canvasCtx.value.strokeStyle = '#ccc'
     canvasCtx.value.lineWidth = 1
-    // 波形区域和标注区域的分隔线
     canvasCtx.value.moveTo(PADDING, timeAxisHeight + waveformHeight)
-    canvasCtx.value.lineTo(canvas.value.width - PADDING, timeAxisHeight + waveformHeight)
+    canvasCtx.value.lineTo(canvasRef.value.width - PADDING, timeAxisHeight + waveformHeight)
     canvasCtx.value.stroke()
 
     // 绘制波形
     const barWidth = 1
     const barGap = 1
-    const totalBars = Math.floor((canvas.value.width - PADDING * 2) / (barWidth + barGap))
-    const samplesPerBar = Math.floor(channelData.value.length / totalBars)
+    const viewWidth = canvasRef.value.width - PADDING * 2
+    const totalBars = Math.floor(viewWidth / (barWidth + barGap))
 
-    canvasCtx.value.fillStyle = COLORS.waveform
-    for (let i = 0; i < totalBars; i++) {
-      const startSample = i * samplesPerBar
-      const endSample = startSample + samplesPerBar
-      let max = 0
+    // 检查缓存是否可用
+    const shouldUpdateCache = !waveformCache.value ||
+      waveformCache.value.startTime !== viewport.startTime ||
+      waveformCache.value.endTime !== viewport.endTime ||
+      waveformCache.value.pixelsPerSecond !== pixelsPerSecond
 
-      for (let j = startSample; j < endSample; j++) {
-        const amplitude = Math.abs(channelData.value[j])
-        if (amplitude > max) {
-          max = amplitude
+    if (shouldUpdateCache) {
+      // 计算可见范围内的采样点
+      const sampleRate = 48000 // 使用标准采样率
+      const startSample = Math.floor(viewport.startTime * sampleRate)
+      const endSample = Math.floor(viewport.endTime * sampleRate)
+      const visibleSamples = endSample - startSample
+      const samplesPerBar = Math.floor(visibleSamples / totalBars)
+
+      // 计算波形数据
+      const waveformData = []
+      for (let i = 0; i < totalBars; i++) {
+        const sampleOffset = startSample + i * samplesPerBar
+        const endSampleOffset = sampleOffset + samplesPerBar
+        let max = 0
+
+        // 使用 subarray 优化内存访问
+        const barSamples = channelData.value.subarray(
+          Math.max(0, sampleOffset),
+          Math.min(channelData.value.length, endSampleOffset)
+        )
+
+        // 计算这个区间的最大振幅
+        for (let j = 0; j < barSamples.length; j++) {
+          const amplitude = Math.abs(barSamples[j])
+          if (amplitude > max) {
+            max = amplitude
+          }
         }
+
+        const barHeight = max * waveformHeight * 0.8
+        const x = i * (barWidth + barGap) + PADDING
+        const y = timeAxisHeight + (waveformHeight - barHeight) / 2
+
+        waveformData.push({ x, y, height: barHeight })
       }
 
-      const barHeight = max * waveformHeight * 0.8
-      const x = i * (barWidth + barGap) + PADDING
-      const y = timeAxisHeight + (waveformHeight - barHeight) / 2
+      // 更新缓存
+      waveformCache.value = {
+        startTime: viewport.startTime,
+        endTime: viewport.endTime,
+        pixelsPerSecond,
+        data: waveformData
+      }
+    }
 
-      canvasCtx.value.fillRect(x, y, barWidth, barHeight)
+    // 绘制波形
+    canvasCtx.value.fillStyle = COLORS.waveform
+    if (waveformCache.value) {
+      waveformCache.value.data.forEach(({ x, y, height }) => {
+        canvasCtx.value!.fillRect(x, y, barWidth, height)
+      })
     }
 
     // 绘制进度线
-    if (currentTime !== null) {
-      const progressX = getXFromTime(currentTime, canvas.value, duration)
+    if (currentTime !== null && currentTime >= viewport.startTime && currentTime <= viewport.endTime) {
+      const progressX = PADDING + (currentTime - viewport.startTime) * pixelsPerSecond
       canvasCtx.value.beginPath()
       canvasCtx.value.strokeStyle = COLORS.progress
       canvasCtx.value.lineWidth = 2
@@ -192,7 +248,7 @@ export const useWaveformDrawer = () => {
     }
 
     // 绘制区域
-    drawRegions(regions, hoveredRegion, editingAnnotation, duration, buttonBounds)
+    drawRegions(regions, hoveredRegion, editingAnnotation, duration, pixelsPerSecond, buttonBounds)
 
     // 绘制选区
     if (selectionRange) {
@@ -212,61 +268,51 @@ export const useWaveformDrawer = () => {
   }
 
   // 绘制时间轴
-  const drawTimeAxis = (duration: number, pixelsPerSecond: number) => {
-    if (!canvasCtx.value || !canvas.value) return
+  const drawTimeAxis = (startTime: number, endTime: number, pixelsPerSecond: number) => {
+    if (!canvasCtx.value || !canvasRef.value) return
 
     const pixelsPerMinute = pixelsPerSecond * 60
-    const totalSeconds = Math.ceil(duration)
+    const duration = endTime - startTime
 
-    // 根据缩放级别选择合适的时间间隔
-    let timeInterval = 30
-    let minorInterval = 5
-    if (pixelsPerSecond >= 30) {
-      timeInterval = 1
-      minorInterval = 0.2
-    } else if (pixelsPerSecond >= 15) {
-      timeInterval = 2
-      minorInterval = 0.5
-    } else if (pixelsPerSecond >= 10) {
-      timeInterval = 5
-      minorInterval = 1
-    } else if (pixelsPerSecond >= 5) {
-      timeInterval = 10
-      minorInterval = 2
-    } else if (pixelsPerSecond >= 2) {
-      timeInterval = 15
-      minorInterval = 3
-    } else if (pixelsPerMinute >= 60) {
-      timeInterval = 30
-      minorInterval = 5
-    } else if (pixelsPerMinute >= 30) {
-      timeInterval = 60
-      minorInterval = 10
-    } else if (pixelsPerMinute >= 15) {
-      timeInterval = 300
-      minorInterval = 60
-    } else if (pixelsPerMinute >= 8) {
-      timeInterval = 600
-      minorInterval = 120
-    } else {
-      timeInterval = 1800
-      minorInterval = 300
+    // 根据缩放级别和可视区域宽度选择合适的时间间隔
+    const viewWidth = canvasRef.value.width - PADDING * 2
+    const minPixelsBetweenTicks = 50 // 刻度之间的最小像素距离
+    
+    // 计算合适的时间间隔
+    let timeInterval = 1 // 从1秒开始
+    while ((timeInterval * pixelsPerSecond) < minPixelsBetweenTicks) {
+      if (timeInterval < 60) { // 小于1分钟时，按5秒递增
+        timeInterval = Math.ceil(timeInterval / 5) * 5
+      } else { // 大于1分钟时，按30秒递增
+        timeInterval = Math.ceil(timeInterval / 30) * 30
+      }
     }
 
     // 绘制时间轴背景
     canvasCtx.value.fillStyle = COLORS.timeAxis.background
-    canvasCtx.value.fillRect(PADDING, 0, canvas.value.width - PADDING * 2, TIME_AXIS_HEIGHT)
+    canvasCtx.value.fillRect(PADDING, 0, viewWidth, TIME_AXIS_HEIGHT)
 
-    // 绘制次要刻度
+    // 计算起始和结束的整数时间点
+    const firstTick = Math.ceil(startTime)
+    const lastTick = Math.floor(endTime)
+
+    // 绘制次要刻度（每秒一个）
     canvasCtx.value.beginPath()
     canvasCtx.value.strokeStyle = COLORS.timeAxis.line.secondary
     canvasCtx.value.lineWidth = 1
-    for (let second = 0; second <= totalSeconds; second += minorInterval) {
-      const x = getXFromTime(second, canvas.value, duration)
-      canvasCtx.value.moveTo(x, TIME_AXIS_HEIGHT - 4)
-      canvasCtx.value.lineTo(x, TIME_AXIS_HEIGHT)
+    
+    // 只在缩放级别较高时显示次要刻度
+    if (pixelsPerSecond >= 5) {
+      for (let time = firstTick; time <= lastTick; time++) {
+        const x = PADDING + (time - startTime) * pixelsPerSecond
+        // 只绘制在可视区域内的刻度
+        if (x >= PADDING && x <= PADDING + viewWidth) {
+          canvasCtx.value.moveTo(x, TIME_AXIS_HEIGHT - 4)
+          canvasCtx.value.lineTo(x, TIME_AXIS_HEIGHT)
+        }
+      }
+      canvasCtx.value.stroke()
     }
-    canvasCtx.value.stroke()
 
     // 绘制主要刻度和文本
     canvasCtx.value.beginPath()
@@ -277,16 +323,20 @@ export const useWaveformDrawer = () => {
     canvasCtx.value.textAlign = 'center'
     canvasCtx.value.textBaseline = 'top'
 
-    for (let second = 0; second <= totalSeconds; second += timeInterval) {
-      const x = getXFromTime(second, canvas.value, duration)
-      const isMainTick = second % 60 === 0
-      const tickLength = isMainTick ? 12 : 8
+    // 从第一个整数时间点开始，按照 timeInterval 的间隔绘制主刻度
+    const firstMainTick = Math.ceil(startTime / timeInterval) * timeInterval
+    for (let time = firstMainTick; time <= lastTick; time += timeInterval) {
+      const x = PADDING + (time - startTime) * pixelsPerSecond
+      // 只绘制在可视区域内的刻度和文本
+      if (x >= PADDING && x <= PADDING + viewWidth) {
+        const isMinuteMark = time % 60 === 0
+        const tickLength = isMinuteMark ? 12 : 8
 
-      canvasCtx.value.moveTo(x, TIME_AXIS_HEIGHT - tickLength)
-      canvasCtx.value.lineTo(x, TIME_AXIS_HEIGHT)
+        canvasCtx.value.moveTo(x, TIME_AXIS_HEIGHT - tickLength)
+        canvasCtx.value.lineTo(x, TIME_AXIS_HEIGHT)
 
-      if (isMainTick || timeInterval < 60) {
-        const timeText = formatTimeAxis(second)
+        // 显示时间文本
+        const timeText = formatTimeAxis(time)
         canvasCtx.value.fillText(timeText, x, 4)
       }
     }
@@ -299,35 +349,45 @@ export const useWaveformDrawer = () => {
     hoveredRegion: { id: string } | null,
     editingAnnotation: { id: string } | null,
     duration: number,
+    pixelsPerSecond: number,
     buttonBounds: {
       add: { x: number; y: number; width: number; height: number } | null;
       edit: { x: number; y: number; width: number; height: number } | null;
       delete: { x: number; y: number; width: number; height: number } | null;
     }
   ) => {
-    if (!canvasCtx.value || !canvas.value) return
+    if (!canvasCtx.value || !canvasRef.value) return
+
+    const ctx = canvasCtx.value // 创建引用以避免重复的空值检查
 
     // 计算各区域高度
     const timeAxisHeight = TIME_AXIS_HEIGHT
     const waveformHeight = WAVEFORM_HEIGHT
-    const annotationHeight = canvas.value.height - timeAxisHeight - waveformHeight
+    const annotationHeight = canvasRef.value.height - timeAxisHeight - waveformHeight
+    const viewWidth = canvasRef.value.width - PADDING * 2
 
     // 重置所有按钮边界
     buttonBounds.edit = null
     buttonBounds.delete = null
 
+    // 遍历所有区域，但只绘制可见的部分
     regions.forEach((region, id) => {
+      // 检查区域是否在可视范围内
+      if (region.end < viewport.startTime || region.start > viewport.endTime) {
+        return // 跳过不在可视范围内的区域
+      }
+
       const isHovered = hoveredRegion?.id === id
       const isEditing = editingAnnotation?.id === id
 
-      // 计算区域的位置和尺寸
-      const startX = getXFromTime(region.start, canvas.value!, duration)
-      const endX = getXFromTime(region.end, canvas.value!, duration)
+      // 计算区域在视口中的位置
+      const startX = PADDING + Math.max(0, region.start - viewport.startTime) * pixelsPerSecond
+      const endX = PADDING + Math.min(viewport.endTime - viewport.startTime, region.end - viewport.startTime) * pixelsPerSecond
       const width = endX - startX
 
       // 绘制波形区域背景
-      canvasCtx.value!.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
-      canvasCtx.value!.fillRect(
+      ctx.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
+      ctx.fillRect(
         startX,
         timeAxisHeight,
         width,
@@ -335,9 +395,9 @@ export const useWaveformDrawer = () => {
       )
 
       // 绘制波形区域边框
-      canvasCtx.value!.strokeStyle = isEditing ? COLORS.region.border.editing : COLORS.region.border.normal
-      canvasCtx.value!.lineWidth = isEditing ? 2 : 1
-      canvasCtx.value!.strokeRect(
+      ctx.strokeStyle = isEditing ? COLORS.region.border.editing : COLORS.region.border.normal
+      ctx.lineWidth = isEditing ? 2 : 1
+      ctx.strokeRect(
         startX,
         timeAxisHeight,
         width,
@@ -345,8 +405,8 @@ export const useWaveformDrawer = () => {
       )
 
       // 绘制标注区域背景
-      canvasCtx.value!.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
-      canvasCtx.value!.fillRect(
+      ctx.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
+      ctx.fillRect(
         startX,
         timeAxisHeight + waveformHeight,
         width,
@@ -354,9 +414,9 @@ export const useWaveformDrawer = () => {
       )
 
       // 绘制标注区域边框
-      canvasCtx.value!.strokeStyle = isEditing ? COLORS.region.border.editing : COLORS.region.border.normal
-      canvasCtx.value!.lineWidth = isEditing ? 2 : 1
-      canvasCtx.value!.strokeRect(
+      ctx.strokeStyle = isEditing ? COLORS.region.border.editing : COLORS.region.border.normal
+      ctx.lineWidth = isEditing ? 2 : 1
+      ctx.strokeRect(
         startX,
         timeAxisHeight + waveformHeight,
         width,
@@ -365,16 +425,16 @@ export const useWaveformDrawer = () => {
 
       // 绘制标注文本
       if (region.text) {
-        canvasCtx.value!.fillStyle = COLORS.text.primary
-        canvasCtx.value!.font = '14px Arial'
-        canvasCtx.value!.textBaseline = 'top'
-        canvasCtx.value!.textAlign = 'left'
+        ctx.fillStyle = COLORS.text.primary
+        ctx.font = '14px Arial'
+        ctx.textBaseline = 'top'
+        ctx.textAlign = 'left'
         
         // 计算文本位置和区域
         const textY = timeAxisHeight + waveformHeight + 5
         const textX = startX + 5
-        const maxWidth = width - 10 - (isHovered ? BUTTON_SIZE * 2 + BUTTON_GAP + 10 : 0) // 考虑按钮占用的空间
-        const lineHeight = 18 // 行高
+        const maxWidth = width - 10 - (isHovered ? BUTTON_SIZE * 2 + BUTTON_GAP + 10 : 0)
+        const lineHeight = 18
 
         // 文本换行处理
         const words = region.text.split('')
@@ -383,7 +443,7 @@ export const useWaveformDrawer = () => {
         
         for (let i = 0; i < words.length; i++) {
           const testLine = line + words[i]
-          const metrics = canvasCtx.value!.measureText(testLine)
+          const metrics = ctx.measureText(testLine)
           
           if (metrics.width > maxWidth && i > 0) {
             lines.push(line)
@@ -395,53 +455,54 @@ export const useWaveformDrawer = () => {
         lines.push(line)
 
         // 绘制文本，如果超出区域则裁剪
-        canvasCtx.value!.save()
-        canvasCtx.value!.beginPath()
-        canvasCtx.value!.rect(startX, timeAxisHeight + waveformHeight, width, annotationHeight)
-        canvasCtx.value!.clip()
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(startX, timeAxisHeight + waveformHeight, width, annotationHeight)
+        ctx.clip()
 
-        // 绘制每一行文本，充满整个区域
+        // 绘制每一行文本
         lines.forEach((line, index) => {
-          // 确保不超出标注区域的高度
           if (textY + (index + 1) * lineHeight <= timeAxisHeight + waveformHeight + annotationHeight - 5) {
-            canvasCtx.value!.fillText(line, textX, textY + index * lineHeight)
+            ctx.fillText(line, textX, textY + index * lineHeight)
           }
         })
 
-        canvasCtx.value!.restore()
+        ctx.restore()
       }
 
       // 如果区域被悬停，绘制编辑和删除按钮
       if (isHovered) {
-        // 计算按钮的垂直位置，放在标注区域右上角
         const annotationY = timeAxisHeight + waveformHeight
-        const buttonY = annotationY + 5 // 顶部边距5px
+        const buttonY = annotationY + 5
 
-        // 确保按钮在区域内且不超出画布边界
-        const editX = Math.min(startX + width - BUTTON_SIZE * 2 - BUTTON_GAP - 5, canvas.value!.width - PADDING - BUTTON_SIZE * 2 - BUTTON_GAP)
-        const deleteX = Math.min(startX + width - BUTTON_SIZE - 5, canvas.value!.width - PADDING - BUTTON_SIZE)
+        // 确保按钮在可视区域内
+        const editX = Math.min(startX + width - BUTTON_SIZE * 2 - BUTTON_GAP - 5, PADDING + viewWidth - BUTTON_SIZE * 2 - BUTTON_GAP)
+        const deleteX = Math.min(startX + width - BUTTON_SIZE - 5, PADDING + viewWidth - BUTTON_SIZE)
 
-        // 绘制编辑按钮
-        drawButton(editX, buttonY, BUTTON_SIZE, COLORS.button.edit)
-        drawEditIcon(editX, buttonY, BUTTON_SIZE)
+        // 只有当按钮完全在可视区域内时才绘制
+        if (editX >= PADDING && editX + BUTTON_SIZE * 2 + BUTTON_GAP <= PADDING + viewWidth) {
+          // 绘制编辑按钮
+          drawButton(editX, buttonY, BUTTON_SIZE, COLORS.button.edit)
+          drawEditIcon(editX, buttonY, BUTTON_SIZE)
 
-        // 绘制删除按钮
-        drawButton(deleteX, buttonY, BUTTON_SIZE, COLORS.button.delete)
-        drawDeleteIcon(deleteX, buttonY, BUTTON_SIZE)
+          // 绘制删除按钮
+          drawButton(deleteX, buttonY, BUTTON_SIZE, COLORS.button.delete)
+          drawDeleteIcon(deleteX, buttonY, BUTTON_SIZE)
 
-        // 设置按钮边界（确保在绘制之后更新）
-        buttonBounds.edit = {
-          x: editX,
-          y: buttonY,
-          width: BUTTON_SIZE,
-          height: BUTTON_SIZE
-        }
+          // 更新按钮边界
+          buttonBounds.edit = {
+            x: editX,
+            y: buttonY,
+            width: BUTTON_SIZE,
+            height: BUTTON_SIZE
+          }
 
-        buttonBounds.delete = {
-          x: deleteX,
-          y: buttonY,
-          width: BUTTON_SIZE,
-          height: BUTTON_SIZE
+          buttonBounds.delete = {
+            x: deleteX,
+            y: buttonY,
+            width: BUTTON_SIZE,
+            height: BUTTON_SIZE
+          }
         }
       }
     })
@@ -457,14 +518,14 @@ export const useWaveformDrawer = () => {
       delete: { x: number; y: number; width: number; height: number } | null;
     }
   ) => {
-    if (!canvasCtx.value || !canvas.value) return
+    if (!canvasCtx.value || !canvasRef.value) return
 
     const timeAxisHeight = TIME_AXIS_HEIGHT
     const waveformHeight = WAVEFORM_HEIGHT
 
     // 计算选区的位置和尺寸
-    const startX = getXFromTime(selectionRange.start, canvas.value!, duration)
-    const endX = getXFromTime(selectionRange.end, canvas.value!, duration)
+    const startX = getXFromTime(selectionRange.start, canvasRef.value!, duration)
+    const endX = getXFromTime(selectionRange.end, canvasRef.value!, duration)
     const width = endX - startX
 
     // 绘制选区背景
@@ -503,8 +564,34 @@ export const useWaveformDrawer = () => {
     }
   }
 
+  function handleMouseMove(e: MouseEvent) {
+    if (!canvasRef.value) return
+
+    const rect = canvasRef.value.getBoundingClientRect()
+    const x = e.clientX - rect.left
+
+    // 使用 viewport 的坐标转换方法
+    const time = viewport.getTimeFromX(x, canvasRef.value.width)
+    
+    // 更新当前时间
+    currentTime.value = time
+  }
+
+  function handleClick(e: MouseEvent) {
+    if (!canvasRef.value) return
+
+    const rect = canvasRef.value.getBoundingClientRect()
+    const x = e.clientX - rect.left
+
+    // 使用 viewport 的坐标转换方法
+    const time = viewport.getTimeFromX(x, canvasRef.value.width)
+    
+    // 触发点击事件
+    emit('click', time)
+  }
+
   return {
-    canvas,
+    canvasRef,
     canvasCtx,
     channelData,
     container,
@@ -516,27 +603,25 @@ export const useWaveformDrawer = () => {
     },
     initialize: (containerElement: HTMLElement) => {
       container.value = containerElement
-      canvas.value = document.createElement('canvas')
-      
-      // 设置 canvas 的样式尺寸
-      canvas.value.style.width = `${containerElement.clientWidth}px`
-      canvas.value.style.height = `${containerElement.clientHeight}px`
-      
-      // 设置 canvas 的实际尺寸
-      canvas.value.width = containerElement.clientWidth
-      canvas.value.height = containerElement.clientHeight
-      
-      containerElement.appendChild(canvas.value)
-      canvasCtx.value = canvas.value.getContext('2d')
+      canvasRef.value = document.createElement('canvas')
+      canvasRef.value.style.width = `${containerElement.clientWidth}px`
+      canvasRef.value.style.height = `${containerElement.clientHeight}px`
+      canvasRef.value.width = containerElement.clientWidth
+      canvasRef.value.height = containerElement.clientHeight
+      containerElement.appendChild(canvasRef.value)
+      canvasCtx.value = canvasRef.value.getContext('2d')
     },
     cleanup: () => {
-      if (canvas.value && container.value) {
-        container.value.removeChild(canvas.value)
+      if (canvasRef.value && container.value) {
+        container.value.removeChild(canvasRef.value)
       }
-      canvas.value = null
+      canvasRef.value = null
       canvasCtx.value = null
       channelData.value = null
       container.value = null
-    }
+    },
+    currentTime,
+    handleMouseMove,
+    handleClick,
   }
 } 

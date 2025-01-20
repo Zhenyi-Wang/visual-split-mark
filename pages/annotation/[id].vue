@@ -75,6 +75,29 @@
               </n-button>
             </n-button-group>
             <n-text style="line-height: 34px;">{{ Math.round(pixelsPerSecond) }}px/s</n-text>
+            <n-divider vertical style="height: 24px; margin: 5px 0;" />
+            <n-space align="center">
+              <n-text>渲染范围:</n-text>
+              <n-input-number
+                v-model:value="viewportStartPercent"
+                :min="0"
+                :max="maxStartPercent"
+                :step="5"
+                size="small"
+                style="width: 80px;"
+              />
+              <n-text>% ({{ formatTime(viewport.startTime) }})</n-text>
+              <n-text>-</n-text>
+              <n-input-number
+                v-model:value="viewportEndPercent"
+                :min="minEndPercent"
+                :max="100"
+                :step="5"
+                size="small"
+                style="width: 80px;"
+              />
+              <n-text>% ({{ formatTime(viewport.endTime) }})</n-text>
+            </n-space>
           </n-space>
         </div>
 
@@ -130,12 +153,17 @@ import {
   AddOutline as IconAdd,
   RemoveOutline as IconRemove
 } from '@vicons/ionicons5'
+import { useViewportStore } from '~/stores/viewport'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
 const message = useMessage()
-
+const viewport = useViewportStore()
+console.log(viewport)
+setTimeout(() => {
+  console.log('11',viewport)
+}, 5000)
 // 添加缺失的响应式变量
 const transcribing = ref(false)
 const exporting = ref(false)
@@ -603,6 +631,27 @@ const exportAnnotations = async (audioFile: AudioFile) => {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+// 修改渲染范围控制相关的计算属性
+const viewportStartPercent = computed({
+  get: () => Math.round((viewport.startTime / duration.value) * 100),
+  set: (value) => viewport.setViewport(
+    (value / 100) * duration.value,
+    viewport.endTime
+  )
+})
+
+const viewportEndPercent = computed({
+  get: () => Math.round((viewport.endTime / duration.value) * 100),
+  set: (value) => viewport.setViewport(
+    viewport.startTime,
+    (value / 100) * duration.value
+  )
+})
+
+// 修改范围限制
+const maxStartPercent = computed(() => Math.round((viewport.endTime / duration.value) * 100) - 5)
+const minEndPercent = computed(() => Math.round((viewport.startTime / duration.value) * 100) + 5)
 </script>
 
 <style scoped>
