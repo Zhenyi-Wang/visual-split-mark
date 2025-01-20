@@ -13,6 +13,7 @@ export default defineNuxtConfig({
       process.env.NODE_ENV === 'production'
         ? [
             'naive-ui',
+            'vueuc',
             '@css-render/vue3-ssr',
             '@juggle/resize-observer'
           ]
@@ -24,6 +25,7 @@ export default defineNuxtConfig({
       exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
       include: [
         'naive-ui',
+        'vueuc',
         '@css-render/vue3-ssr',
         '@vicons/carbon',
         '@vicons/ionicons5',
