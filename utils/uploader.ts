@@ -1,35 +1,36 @@
 export const uploader = {
   async saveFile(file: File, path: string, progressCallback?: (progress: number) => void): Promise<void> {
-    try {
-      // 读取文件数据
-      const arrayBuffer = await file.arrayBuffer()
-      const uint8Array = new Uint8Array(arrayBuffer)
-      
-      // 分块上传，每块 5MB
-      const chunkSize = 5 * 1024 * 1024
-      const totalChunks = Math.ceil(uint8Array.length / chunkSize)
-      
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * chunkSize
-        const end = Math.min(start + chunkSize, uint8Array.length)
-        const chunk = uint8Array.slice(start, end)
-        
-        await $fetch('/api/file/save', {
-          method: 'POST',
-          body: {
-            path,
-            data: Array.from(chunk),
-            isFirstChunk: i === 0,
-            isLastChunk: i === totalChunks - 1
-          }
-        })
-        
-        if (progressCallback) {
-          progressCallback((i + 1) / totalChunks)
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('path', path)
+
+      // 监听上传进度
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && progressCallback) {
+          const progress = event.loaded / event.total
+          progressCallback(progress)
         }
       }
-    } catch (error) {
-      throw new Error(`Failed to save file: ${error instanceof Error ? error.message : String(error)}`)
-    }
+
+      // 监听请求完成
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          resolve()
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`))
+        }
+      }
+
+      // 监听错误
+      xhr.onerror = () => {
+        reject(new Error('Upload failed'))
+      }
+
+      // 发送请求
+      xhr.open('POST', '/api/file/save')
+      xhr.send(formData)
+    })
   }
 } 

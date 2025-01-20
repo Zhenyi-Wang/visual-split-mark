@@ -13,8 +13,8 @@
               :show-file-list="false"
               @change="handleFileUpload"
             >
-              <n-button type="primary" :loading="isUploading">
-                {{ isUploading ? '上传中...' : '上传音频' }}
+              <n-button type="primary" :loading="isUploading || isConverting">
+                {{ isUploading ? '上传中...' : isConverting ? '转换中...' : '上传音频' }}
               </n-button>
             </n-upload>
           </n-space>
@@ -30,14 +30,14 @@
               :show-file-list="false"
               @change="handleFileUpload"
             >
-              <n-button type="primary" :loading="isUploading">
-                {{ isUploading ? '上传中...' : '上传音频' }}
+              <n-button type="primary" :loading="isUploading || isConverting">
+                {{ isUploading ? '上传中...' : isConverting ? '转换中...' : '上传音频' }}
               </n-button>
             </n-upload>
           </template>
         </n-empty>
 
-        <template v-if="isUploading">
+        <template v-if="isUploading || isConverting">
           <n-space vertical>
             <n-text>{{ currentStatus }}</n-text>
             <n-progress
@@ -45,7 +45,9 @@
               :percentage="uploadProgress"
               :height="24"
               :show-indicator="true"
-              processing
+              :indicator-placement="'inside'"
+              :processing="true"
+              :status="isConverting ? 'warning' : 'info'"
             />
           </n-space>
         </template>
@@ -134,7 +136,11 @@ const showDeleteModal = ref(false)
 const fileToDelete = ref<AudioFile | null>(null)
 const uploadProgress = ref(0)
 const isUploading = ref(false)
+const isConverting = ref(false)
 const currentStatus = ref('')
+
+// 修改定时器类型声明
+const convertingTimer = ref<NodeJS.Timeout | null>(null)
 
 const currentProject = computed(() => projectStore.currentProject)
 const audioFiles = computed(() => projectStore.projectAudioFiles)
@@ -223,13 +229,35 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     
     // 上传文件
     await uploader.saveFile(file.file, newAudioFile.originalPath, (progress: number) => {
-      uploadProgress.value = progress
+      uploadProgress.value = Math.floor(progress * 100 * 10) / 10
     })
     
     message.success('文件上传成功')
+    isUploading.value = false
 
     // 开始转码
+    isConverting.value = true
     currentStatus.value = '转换格式'
+    uploadProgress.value = 0
+
+    // 启动模拟进度
+    let increment = 1
+    convertingTimer.value = setInterval(() => {
+      if (uploadProgress.value < 95) {
+        // 进度越大，增量越小
+        if (uploadProgress.value < 30) {
+          increment = 2
+        } else if (uploadProgress.value < 60) {
+          increment = 1
+        } else if (uploadProgress.value < 90) {
+          increment = 0.5
+        } else {
+          increment = 0.2
+        }
+        uploadProgress.value = Math.round((Math.min(95, uploadProgress.value + increment)) * 10) / 10
+      }
+    }, 100)
+
     try {
       // 调用服务器端转码 API
       await $fetch('/api/file/convert', {
@@ -245,6 +273,7 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
         ...newAudioFile,
         status: 'ready'
       })
+      uploadProgress.value = 100
       message.success('转码成功')
     } catch (error) {
       console.error('Conversion failed:', error)
@@ -253,12 +282,21 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
         status: 'error'
       })
       message.error('转码失败')
+    } finally {
+      // 清除定时器
+      if (convertingTimer.value) {
+        clearInterval(convertingTimer.value)
+        convertingTimer.value = null
+      }
+      isConverting.value = false
+      uploadProgress.value = 0
+      currentStatus.value = ''
     }
   } catch (error) {
     console.error('File upload failed:', error)
     message.error('文件上传失败')
-  } finally {
     isUploading.value = false
+    isConverting.value = false
     uploadProgress.value = 0
     currentStatus.value = ''
   }
