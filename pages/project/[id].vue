@@ -203,16 +203,21 @@ const handleBack = () => {
 const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFileInfo[] }) => {
   const { file } = data
   if (!file.file || !currentProject.value) return
-  isUploading.value = true
-  currentStatus.value = '上传文件'
+
+  let eventSource: EventSource | null = null
+  let newAudioFile: AudioFile | null = null
   
   try {
+    // 开始上传
+    isUploading.value = true
+    currentStatus.value = '上传文件'
+    
     // 生成随机文件名
     const originalId = nanoid()
     const wavId = nanoid()
     
     // 生成文件路径
-    const newAudioFile: AudioFile = {
+    newAudioFile = {
       id: nanoid(),
       projectId: currentProject.value.id,
       originalName: file.file.name,
@@ -241,46 +246,44 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     uploadProgress.value = 0
 
     // 创建 SSE 连接
-    const eventSource = new EventSource(`/api/file/convert-progress?fileId=${newAudioFile.id}`)
+    eventSource = new EventSource(`/api/file/convert-progress?fileId=${newAudioFile.id}`)
     eventSource.onmessage = (event) => {
       const { progress } = JSON.parse(event.data)
       uploadProgress.value = Math.round(progress * 10) / 10
     }
 
-    try {
-      // 调用服务器端转码 API
-      await $fetch('/api/file/convert', {
-        method: 'POST',
-        body: {
-          inputPath: newAudioFile.originalPath,
-          outputPath: newAudioFile.wavPath,
-          fileId: newAudioFile.id
-        }
-      })
-      
-      // 更新音频文件状态
-      await projectStore.updateAudioFile({
-        ...newAudioFile,
-        status: 'ready'
-      })
-      message.success('转码成功')
-    } catch (error) {
-      console.error('Conversion failed:', error)
+    // 调用服务器端转码 API
+    await $fetch('/api/file/convert', {
+      method: 'POST',
+      body: {
+        inputPath: newAudioFile.originalPath,
+        outputPath: newAudioFile.wavPath,
+        fileId: newAudioFile.id
+      }
+    })
+    
+    // 更新音频文件状态
+    await projectStore.updateAudioFile({
+      ...newAudioFile,
+      status: 'ready'
+    })
+    message.success('转码成功')
+  } catch (error) {
+    console.error('Operation failed:', error)
+    message.error(isConverting.value ? '转码失败' : '文件上传失败')
+    
+    // 如果已经创建了音频文件，更新其状态为错误
+    if (newAudioFile) {
       await projectStore.updateAudioFile({
         ...newAudioFile,
         status: 'error'
-      })
-      message.error('转码失败')
-    } finally {
-      // 关闭 SSE 连接
-      eventSource.close()
-      isConverting.value = false
-      uploadProgress.value = 0
-      currentStatus.value = ''
+      }).catch(console.error)
     }
-  } catch (error) {
-    console.error('File upload failed:', error)
-    message.error('文件上传失败')
+  } finally {
+    // 清理资源和状态
+    if (eventSource) {
+      eventSource.close()
+    }
     isUploading.value = false
     isConverting.value = false
     uploadProgress.value = 0
