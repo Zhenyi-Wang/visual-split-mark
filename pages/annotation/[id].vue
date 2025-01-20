@@ -172,6 +172,7 @@ const {
   pixelsPerSecond,
   selectedRegion,
   editingAnnotation,
+  clearEditingAnnotation,
   initialize,
   destroy,
   playPause,
@@ -186,7 +187,8 @@ const {
   setPlaybackRate,
   onAddButtonClick,
   onEditButtonClick,
-  onDeleteButtonClick
+  onDeleteButtonClick,
+  updateDrawing
 } = useAudioVisualizer()
 
 const waveformRef = ref<HTMLElement | null>(null)
@@ -448,7 +450,7 @@ const handleConfirmDelete = async () => {
     await projectStore.deleteAnnotation(annotationToDelete.value.id)
     await saveToStorage() // 自动保存
     if (editingAnnotation.value?.id === annotationToDelete.value.id) {
-      editingAnnotation.value = null
+      clearEditingAnnotation()
     }
     showDeleteModal.value = false
     message.success('标注已删除')
@@ -631,18 +633,24 @@ const exportAnnotations = async (audioFile: AudioFile) => {
 // 修改渲染范围控制相关的计算属性
 const viewportStartPercent = computed({
   get: () => Math.round((viewport.startTime / duration.value) * 100),
-  set: (value) => viewport.setViewport(
-    (value / 100) * duration.value,
-    viewport.endTime
-  )
+  set: async (value) => {
+    viewport.setViewport(
+      (value / 100) * duration.value,
+      viewport.endTime
+    )
+    await updateDrawing()
+  }
 })
 
 const viewportEndPercent = computed({
   get: () => Math.round((viewport.endTime / duration.value) * 100),
-  set: (value) => viewport.setViewport(
-    viewport.startTime,
-    (value / 100) * duration.value
-  )
+  set: async (value) => {
+    viewport.setViewport(
+      viewport.startTime,
+      (value / 100) * duration.value
+    )
+    await updateDrawing()
+  }
 })
 
 // 修改范围限制

@@ -25,6 +25,7 @@ export const useWaveformDrawer = () => {
   const canvasCtx = ref<CanvasRenderingContext2D | null>(null)
   const channelData = ref<Float32Array | null>(null)
   const container = ref<HTMLElement | null>(null)
+  const isLoading = ref(false)
 
   // 使用 viewport store
   const viewport = useViewportStore()
@@ -111,7 +112,7 @@ export const useWaveformDrawer = () => {
   }
 
   // 绘制波形
-  const drawWaveform = (
+  const drawWaveform = async (
     duration: number,
     currentTime: number | null,
     pixelsPerSecond: number,
@@ -272,6 +273,7 @@ export const useWaveformDrawer = () => {
     if (buttonBounds.delete) {
       buttonBounds.delete = { ...buttonBounds.delete }
     }
+
   }
 
   // 绘制时间轴
@@ -581,6 +583,7 @@ export const useWaveformDrawer = () => {
     drawWaveform,
     drawRegions,
     drawSelection,
+    isLoading: readonly(isLoading),
     setChannelData: (data: Float32Array) => {
       channelData.value = data
     },

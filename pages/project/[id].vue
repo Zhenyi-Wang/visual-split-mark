@@ -209,7 +209,6 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
   
   try {
     // 开始上传
-    console.log('开始上传: isUploading =', true, 'isConverting =', isConverting.value)
     isUploading.value = true
     currentStatus.value = '上传文件'
     
@@ -239,11 +238,9 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     })
     
     message.success('文件上传成功')
-    console.log('上传完成: isUploading =', false, 'isConverting =', isConverting.value)
     isUploading.value = false
 
     // 开始转码
-    console.log('开始转码: isUploading =', isUploading.value, 'isConverting =', true)
     isConverting.value = true
     currentStatus.value = '转换格式'
     uploadProgress.value = 0
@@ -270,11 +267,9 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
       ...newAudioFile,
       status: 'ready'
     })
-    console.log('转码完成前: isUploading =', isUploading.value, 'isConverting =', isConverting.value)
     message.success('转码成功')
   } catch (error) {
     console.error('Operation failed:', error)
-    console.log('错误状态: isUploading =', isUploading.value, 'isConverting =', isConverting.value)
     message.error(isConverting.value ? '转码失败' : '文件上传失败')
     
     // 如果已经创建了音频文件，更新其状态为错误
@@ -289,13 +284,11 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     if (eventSource) {
       eventSource.close()
     }
-    console.log('清理前状态: isUploading =', isUploading.value, 'isConverting =', isConverting.value)
     // 确保所有状态都被重置
     isUploading.value = false
     isConverting.value = false
     uploadProgress.value = 0
     currentStatus.value = ''
-    console.log('最终状态: isUploading =', isUploading.value, 'isConverting =', isConverting.value)
   }
 }
 

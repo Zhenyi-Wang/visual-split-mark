@@ -1,4 +1,4 @@
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, readonly } from 'vue'
 import type { AudioFile } from '~/types/project'
 import type {
   Region,
@@ -60,7 +60,7 @@ export function useAudioVisualizer() {
     
     // 添加音频事件监听
     if (audioPlayer.audioElement.value) {
-      audioPlayer.audioElement.value.addEventListener('timeupdate', () => {
+      audioPlayer.audioElement.value.addEventListener('timeupdate', async () => {
         if (!waveformDrawer.canvas.value) return
         const currentY = (audioPlayer.currentTime.value / audioPlayer.duration.value) * (waveformDrawer.canvas.value.height - PADDING * 2) + PADDING
         
@@ -79,7 +79,7 @@ export function useAudioVisualizer() {
         // 清除选区
         interactionHandler.clearSelection()
         
-        updateDrawing()
+        await updateDrawing()
       })
     }
 
@@ -99,7 +99,7 @@ export function useAudioVisualizer() {
 
     // 添加鼠标事件
     if (waveformDrawer.canvas.value) {
-      waveformDrawer.canvas.value.addEventListener('mousedown', (e) => {
+      waveformDrawer.canvas.value.addEventListener('mousedown', async (e) => {
         if (!waveformDrawer.canvas.value) return
         clickStartTime = interactionHandler.handleMouseDown(
           e,
@@ -112,10 +112,10 @@ export function useAudioVisualizer() {
           deleteButtonBounds.value,
           audioPlayer.seek
         )
-        updateDrawing()
+        await updateDrawing()
       })
 
-      waveformDrawer.canvas.value.addEventListener('mousemove', (e) => {
+      waveformDrawer.canvas.value.addEventListener('mousemove', async (e) => {
         if (!waveformDrawer.canvas.value) return
         const result = interactionHandler.handleMouseMove(
           e,
@@ -137,11 +137,11 @@ export function useAudioVisualizer() {
           } else if (result.type === 'selection') {
             // 选区状态已经在 handleMouseMove 中处理
           }
-          updateDrawing()
+          await updateDrawing()
         }
       })
 
-      waveformDrawer.canvas.value.addEventListener('mouseup', (e) => {
+      waveformDrawer.canvas.value.addEventListener('mouseup', async (e) => {
         if (!waveformDrawer.canvas.value) return
         const result = interactionHandler.handleMouseUp(
           e,
@@ -153,19 +153,19 @@ export function useAudioVisualizer() {
         if (result?.type === 'annotation' && result.data && onAnnotationChangeHandler) {
           onAnnotationChangeHandler(result.data)
         }
-        updateDrawing()
+        await updateDrawing()
       })
 
-      waveformDrawer.canvas.value.addEventListener('mouseleave', () => {
+      waveformDrawer.canvas.value.addEventListener('mouseleave', async () => {
         if (!waveformDrawer.canvas.value) return
         if (interactionHandler.handleMouseLeave(waveformDrawer.canvas.value)) {
-          updateDrawing()
+          await updateDrawing()
         }
       })
     }
 
     // 设置标注变更回调
-    interactionHandler.onAnnotationChange.value = (annotation) => {
+    interactionHandler.onAnnotationChange.value = async (annotation) => {
       // 先更新区域
       regionManager.updateRegion(annotation)
       // 如果不是在拖动状态，才清理状态
@@ -176,11 +176,11 @@ export function useAudioVisualizer() {
       if (annotation.id === editingAnnotation.value?.id) {
         editingAnnotation.value = { ...annotation }
       }
-      updateDrawing()
+      await updateDrawing()
     }
 
     // 设置按钮回调
-    interactionHandler.onAddButtonClick.value = () => {
+    interactionHandler.onAddButtonClick.value = async () => {
       if (interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null) {
         // 设置选区
         selectedRegion.value = {
@@ -188,11 +188,11 @@ export function useAudioVisualizer() {
           end: interactionHandler.selectionEnd.value
         }
         // 更新绘制，确保选区被更新
-        updateDrawing()
+        await updateDrawing()
       }
     }
 
-    interactionHandler.onEditButtonClick.value = (id) => {
+    interactionHandler.onEditButtonClick.value = async (id) => {
       if (!id) return
       const region = regionManager.getRegion(id)
       if (region) {
@@ -204,7 +204,7 @@ export function useAudioVisualizer() {
         if (onAnnotationChangeHandler) {
           onAnnotationChangeHandler({ id, ...region })
         }
-        updateDrawing()
+        await updateDrawing()
       }
     }
 
@@ -225,12 +225,15 @@ export function useAudioVisualizer() {
   }
 
   // 更新绘制
-  const updateDrawing = () => {
+  const updateDrawing = async () => {
     if (!waveformDrawer.canvas.value) return
 
     // 准备选区信息
     const selectionRange = interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null
-      ? { start: interactionHandler.selectionStart.value, end: interactionHandler.selectionEnd.value }
+      ? {
+          start: interactionHandler.selectionStart.value,
+          end: interactionHandler.selectionEnd.value
+        }
       : null
 
     // 同步更新 selectedRegion
@@ -248,7 +251,7 @@ export function useAudioVisualizer() {
     }
 
     // 绘制波形
-    waveformDrawer.drawWaveform(
+    await waveformDrawer.drawWaveform(
       audioPlayer.duration.value,
       audioPlayer.currentTime.value,
       pixelsPerSecond.value,
@@ -304,23 +307,27 @@ export function useAudioVisualizer() {
     destroy,
     playPause: audioPlayer.playPause,
     seek: audioPlayer.seek,
-    zoomIn: () => {
+    zoomIn: async () => {
       pixelsPerSecond.value = Math.min(pixelsPerSecond.value * 1.5, 1000)
-      updateDrawing()
+      await updateDrawing();
     },
-    zoomOut: () => {
+    zoomOut: async () => {
       pixelsPerSecond.value = Math.max(pixelsPerSecond.value / 1.5, 10)
-      updateDrawing()
+      await updateDrawing();
     },
     addRegion: regionManager.addRegion,
     updateRegion: regionManager.updateRegion,
     removeRegion: regionManager.removeRegion,
     clearRegions: regionManager.clearRegions,
+    clearEditingAnnotation: () => {
+      editingAnnotation.value = null;
+    },
     setPlaybackRate: audioPlayer.setPlaybackRate,
 
     // 回调设置
     onAddButtonClick: interactionHandler.onAddButtonClick,
     onEditButtonClick: interactionHandler.onEditButtonClick,
-    onDeleteButtonClick: interactionHandler.onDeleteButtonClick
+    onDeleteButtonClick: interactionHandler.onDeleteButtonClick,
+    updateDrawing
   }
 } 
