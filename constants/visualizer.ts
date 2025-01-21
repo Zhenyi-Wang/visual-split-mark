@@ -38,14 +38,18 @@ export const COLORS = {
   region: {
     fill: {
       normal: 'rgba(255, 182, 193, 0.2)', // 区域填充色
-      hover: 'rgba(255, 182, 193, 0.3)', // 区域悬停填充色
-      editing: 'rgba(255, 182, 193, 0.4)', // 区域编辑填充色
+      hover: 'rgba(255, 182, 193, 0.4)', // 区域悬停填充色（增加不透明度）
+      editing: 'rgba(255, 182, 193, 0.5)', // 区域编辑填充色
     },
     border: {
       normal: '#ffb6c1', // 区域边框色
       hover: '#ff69b4', // 区域悬停边框色
       editing: '#ff1493', // 区域编辑边框色
     },
+    handle: {
+      fill: '#ff69b4', // 控制点填充色
+      stroke: '#fff', // 控制点边框色
+    }
   },
   button: {
     add: '#4a9eff', // 添加按钮颜色

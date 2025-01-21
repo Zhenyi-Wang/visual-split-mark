@@ -414,6 +414,24 @@ export const useWaveformDrawer = () => {
         waveformHeight
       )
 
+      // 如果是悬停状态，绘制控制点
+      if (isHovered) {
+        // 绘制左侧控制点
+        ctx.beginPath()
+        ctx.fillStyle = COLORS.region.handle.fill
+        ctx.strokeStyle = COLORS.region.handle.stroke
+        ctx.lineWidth = 2
+        ctx.arc(startX, timeAxisHeight + waveformHeight / 2, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+
+        // 绘制右侧控制点
+        ctx.beginPath()
+        ctx.arc(endX, timeAxisHeight + waveformHeight / 2, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+      }
+
       // 绘制标注区域背景
       ctx.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
       ctx.fillRect(
