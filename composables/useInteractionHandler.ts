@@ -270,7 +270,6 @@ export function useInteractionHandler() {
       const { x: bx, y: by, width: bw, height: bh } = addButtonBounds
       if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
         isOnButton = true
-        canvas.style.cursor = 'pointer'
       }
     }
 
@@ -280,21 +279,18 @@ export function useInteractionHandler() {
         const { x: bx, y: by, width: bw, height: bh } = editButtonBounds
         if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
           isOnButton = true
-          canvas.style.cursor = 'pointer'
         }
       }
       if (deleteButtonBounds) {
         const { x: bx, y: by, width: bw, height: bh } = deleteButtonBounds
         if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
           isOnButton = true
-          canvas.style.cursor = 'pointer'
         }
       }
     }
 
     // 如果在拖动标注
     if (isDraggingAnnotation.value && hoveredRegion.value && draggingHandle.value) {
-      canvas.style.cursor = 'ew-resize'
       const updatedRegion = { ...hoveredRegion.value }
       if (draggingHandle.value === 'start') {
         updatedRegion.start = Math.min(time, updatedRegion.end - 0.1)
@@ -309,7 +305,6 @@ export function useInteractionHandler() {
 
     // 如果在创建选区
     if (isDragging.value) {
-      canvas.style.cursor = 'col-resize'
       if (dragStartX.value !== null) {
         selectionEnd.value = time
         selectedRegion.value = {
@@ -329,7 +324,6 @@ export function useInteractionHandler() {
         
         if (Math.abs(x - startX) <= HANDLE_SIZE || Math.abs(x - endX) <= HANDLE_SIZE) {
           isOnHandle = true
-          canvas.style.cursor = 'ew-resize'
           if (!hoveredRegion.value || hoveredRegion.value.id !== id) {
             hoveredRegion.value = { id, ...region }
             return { type: 'hover' }
@@ -339,7 +333,6 @@ export function useInteractionHandler() {
       }
 
       if (!isOnHandle) {
-        canvas.style.cursor = 'default'
         const regionInfo = findRegionAtPosition(x, y, canvas, duration, regions)
         if (regionInfo) {
           const region = regions.get(regionInfo.id)
@@ -352,8 +345,6 @@ export function useInteractionHandler() {
           return { type: 'hover' }
         }
       }
-    } else if (!isOnButton) {
-      canvas.style.cursor = 'default'
     }
   }
 
@@ -401,7 +392,6 @@ export function useInteractionHandler() {
 
   // 处理鼠标离开事件
   const handleMouseLeave = (canvas: HTMLCanvasElement) => {
-    canvas.style.cursor = 'default'
     if (hoveredRegion.value) {
       hoveredRegion.value = null
       return true
