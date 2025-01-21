@@ -1,4 +1,4 @@
-import { createReadStream } from 'fs'
+import { createReadStream, statSync } from 'fs'
 import { join } from 'path'
 import { access } from 'fs/promises'
 
@@ -27,9 +27,13 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // 获取文件大小
+    const stats = statSync(absolutePath)
+
     // 设置响应头
     setHeaders(event, {
-      'Content-Type': 'application/octet-stream'
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': stats.size.toString()
     })
 
     // 返回文件流

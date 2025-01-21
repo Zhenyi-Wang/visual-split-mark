@@ -64,3 +64,116 @@ export function generateFilePath(directory: string, filename: string): string {
   const ext = filename.split('.').pop()
   return `${directory}/${timestamp}-${random}.${ext}`
 }
+
+/**
+ * 加载音频文件并显示进度
+ * @param source 音频文件路径
+ * @param onProgress 进度回调函数
+ */
+export async function loadAudioBlobWithProgress(
+  source: string,
+  onProgress: (phase: 'download' | 'decode', progress: number) => void
+): Promise<{ blob: Blob, arrayBuffer: ArrayBuffer, audioBuffer: AudioBuffer }> {
+  console.log('开始加载音频文件:', source)
+  
+  // 1. 下载文件并跟踪进度
+  console.log('开始下载文件...')
+  const response = await fetch(`/api/file/load?path=${encodeURIComponent(source)}`)
+  if (!response.ok) {
+    console.error('文件下载失败:', response.statusText)
+    throw new Error(`Failed to load blob: ${response.statusText}`)
+  }
+  
+  const contentLength = Number(response.headers.get('content-length'))
+  if (contentLength) {
+    console.log('文件总大小:', (contentLength / 1024 / 1024).toFixed(2), 'MB')
+  } else {
+    console.log('文件大小未知')
+  }
+  
+  const reader = response.body!.getReader()
+  const chunks: Uint8Array[] = []
+  let receivedLength = 0
+  
+  // 读取数据流
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    
+    chunks.push(value)
+    receivedLength += value.length
+    
+    // 只有在知道总大小时才计算和报告百分比进度
+    if (contentLength) {
+      const progress = (receivedLength / contentLength) * 100
+      await nextTick(() => onProgress('download', progress))
+      console.log('下载进度:', progress.toFixed(1) + '%', 
+        '已下载:', (receivedLength / 1024 / 1024).toFixed(2), 'MB')
+    } else {
+      // 否则只报告已下载的大小
+      await nextTick(() => onProgress('download', 0))
+      console.log('已下载:', (receivedLength / 1024 / 1024).toFixed(2), 'MB')
+    }
+  }
+  
+  console.log('文件下载完成')
+  
+  // 合并数据块
+  const blob = new Blob(chunks)
+  console.log('Blob 大小:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
+  
+  // 2. 转换为 ArrayBuffer
+  console.log('开始转换为 ArrayBuffer...')
+  const arrayBuffer = await blob.arrayBuffer()
+  console.log('ArrayBuffer 大小:', (arrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB')
+  
+  // 3. 解码音频
+  console.log('开始解码音频...')
+  const audioContext = new AudioContext()
+  console.log('音频上下文采样率:', audioContext.sampleRate, 'Hz')
+  
+  // 使用分段解码来模拟进度
+  const SEGMENTS = 10 // 将解码过程分为10段
+  let decodedSegments = 0
+  
+  // 开始解码前报告进度
+  await nextTick(() => onProgress('decode', 0))
+  console.log('解码开始: 0%')
+  
+  // 使用 Promise 包装解码过程
+  const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+    const startTime = performance.now()
+    const decodeInterval = setInterval(async () => {
+      decodedSegments++
+      if (decodedSegments < SEGMENTS) {
+        const progress = (decodedSegments / SEGMENTS) * 100
+        await nextTick(() => onProgress('decode', progress))
+        console.log('解码进度:', progress.toFixed(1) + '%',
+          '已用时:', ((performance.now() - startTime) / 1000).toFixed(1), '秒')
+      }
+    }, 100)
+
+    audioContext.decodeAudioData(
+      arrayBuffer,
+      async (decodedData) => {
+        clearInterval(decodeInterval)
+        const totalTime = (performance.now() - startTime) / 1000
+        await nextTick(() => onProgress('decode', 100))
+        console.log('解码完成: 100%', 
+          '\n总用时:', totalTime.toFixed(1), '秒',
+          '\n音频时长:', decodedData.duration.toFixed(1), '秒',
+          '\n声道数:', decodedData.numberOfChannels,
+          '\n采样率:', decodedData.sampleRate, 'Hz')
+        resolve(decodedData)
+      },
+      (error) => {
+        clearInterval(decodeInterval)
+        console.error('解码失败:', error)
+        reject(error)
+      }
+    )
+  })
+
+  console.log('音频加载完成')
+  return { blob, arrayBuffer, audioBuffer }
+}

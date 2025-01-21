@@ -1,7 +1,9 @@
 import { ref } from 'vue'
 import type { AudioFile } from '~/types/project'
 import type { AudioPlayer } from '~/types/audio'
-import { loadBlob } from '~/utils/file'
+import { loadBlob, loadAudioBlobWithProgress } from '~/utils/file'
+
+export type LoadingPhase = 'idle' | 'downloading' | 'decoding' | 'ready'
 
 export function useAudioPlayer() {
   const audioContext = ref<AudioContext | null>(null)
@@ -11,48 +13,65 @@ export function useAudioPlayer() {
   const currentTime = ref(0)
   const playbackRate = ref(1)
   let channelData: Float32Array | null = null
+  
+  // 新增状态
+  const loadingPhase = ref<LoadingPhase>('idle')
+  const loadingProgress = ref(0)
 
   const initialize = async (audioFile: AudioFile) => {
-    // 创建音频元素
-    audioElement.value = new Audio()
-    audioElement.value.crossOrigin = 'anonymous'
-    
-    // 加载音频文件
-    const blob = await loadBlob(audioFile.wavPath)
-    if (!blob) {
-      throw new Error('Failed to load audio file')
+    try {
+      // 重置状态
+      loadingPhase.value = 'downloading'
+      loadingProgress.value = 0
+      
+      // 创建音频元素
+      audioElement.value = new Audio()
+      audioElement.value.crossOrigin = 'anonymous'
+      
+      // 加载并解码音频文件
+      const { blob, audioBuffer } = await loadAudioBlobWithProgress(
+        audioFile.wavPath,
+        (phase, progress) => {
+          loadingPhase.value = phase === 'download' ? 'downloading' : 'decoding'
+          loadingProgress.value = progress
+        }
+      )
+      
+      // 创建音频上下文
+      audioContext.value = new AudioContext()
+      
+      // 设置音频数据
+      duration.value = audioBuffer.duration
+      channelData = audioBuffer.getChannelData(0)
+      
+      // 创建音频源
+      audioElement.value.src = URL.createObjectURL(blob)
+      const source = audioContext.value.createMediaElementSource(audioElement.value)
+      source.connect(audioContext.value.destination)
+      
+      // 添加音频事件监听
+      audioElement.value.addEventListener('play', () => {
+        isPlaying.value = true
+      })
+      
+      audioElement.value.addEventListener('pause', () => {
+        isPlaying.value = false
+      })
+      
+      audioElement.value.addEventListener('timeupdate', () => {
+        currentTime.value = audioElement.value?.currentTime || 0
+      })
+      
+      // 更新状态
+      loadingPhase.value = 'ready'
+      loadingProgress.value = 100
+      
+      return channelData
+    } catch (error) {
+      loadingPhase.value = 'idle'
+      loadingProgress.value = 0
+      throw error
     }
-    const arrayBuffer = await blob.arrayBuffer()
-    
-    // 创建音频上下文
-    audioContext.value = new AudioContext()
-    
-    // 解码音频数据
-    const audioBuffer = await audioContext.value.decodeAudioData(arrayBuffer)
-    duration.value = audioBuffer.duration
-    
-    // 获取波形数据
-    channelData = audioBuffer.getChannelData(0)
-    
-    // 创建音频源并连接
-    audioElement.value.src = URL.createObjectURL(blob)
-    const source = audioContext.value.createMediaElementSource(audioElement.value)
-    source.connect(audioContext.value.destination)
-    
-    // 添加音频事件监听
-    audioElement.value.addEventListener('play', () => {
-      isPlaying.value = true
-    })
-    
-    audioElement.value.addEventListener('pause', () => {
-      isPlaying.value = false
-    })
-    
-    audioElement.value.addEventListener('timeupdate', () => {
-      currentTime.value = audioElement.value?.currentTime || 0
-    })
-
-    return channelData
   }
 
   const playPause = async () => {
@@ -105,6 +124,9 @@ export function useAudioPlayer() {
     currentTime,
     playbackRate,
     channelData,
+    // 新增返回值
+    loadingPhase,
+    loadingProgress,
     initialize,
     playPause,
     seek,

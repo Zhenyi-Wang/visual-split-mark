@@ -108,34 +108,49 @@
         </div>
       </div>
     </n-space>
+
+    <!-- 加载状态模态框 -->
+    <n-modal
+      v-model:show="isLoading"
+      :mask-closable="false"
+      :closable="false"
+      preset="card"
+      style="width: 400px;"
+      class="loading-modal"
+      :title="loadingDescription"
+    >
+      <n-space vertical justify="center" align="center">
+        <n-spin size="large" />
+      </n-space>
+    </n-modal>
+
+    <!-- 添加删除确认对话框 -->
+    <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除标注" type="warning">
+      <div>确定要删除这条标注吗？</div>
+      <template #action>
+        <n-space>
+          <n-button @click="showDeleteModal = false">取消</n-button>
+          <n-button type="error" @click="handleConfirmDelete">确定删除</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- 添加标注文本输入对话框 -->
+    <n-modal v-model:show="showTextInputModal" preset="dialog" :title="pendingAnnotation?.text ? '编辑标注' : '输入标注文本'">
+      <n-input
+        v-model:value="annotationText"
+        type="textarea"
+        placeholder="请输入标注文本"
+        :autosize="{ minRows: 3, maxRows: 5 }"
+      />
+      <template #action>
+        <n-space>
+          <n-button @click="showTextInputModal = false">取消</n-button>
+          <n-button type="primary" @click="handleConfirmAnnotation">确定</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
-
-  <!-- 添加删除确认对话框 -->
-  <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除标注" type="warning">
-    <div>确定要删除这条标注吗？</div>
-    <template #action>
-      <n-space>
-        <n-button @click="showDeleteModal = false">取消</n-button>
-        <n-button type="error" @click="handleConfirmDelete">确定删除</n-button>
-      </n-space>
-    </template>
-  </n-modal>
-
-  <!-- 添加标注文本输入对话框 -->
-  <n-modal v-model:show="showTextInputModal" preset="dialog" :title="pendingAnnotation?.text ? '编辑标注' : '输入标注文本'">
-    <n-input
-      v-model:value="annotationText"
-      type="textarea"
-      placeholder="请输入标注文本"
-      :autosize="{ minRows: 3, maxRows: 5 }"
-    />
-    <template #action>
-      <n-space>
-        <n-button @click="showTextInputModal = false">取消</n-button>
-        <n-button type="primary" @click="handleConfirmAnnotation">确定</n-button>
-      </n-space>
-    </template>
-  </n-modal>
 </template>
 
 <script setup lang="ts">
@@ -147,6 +162,7 @@ import type { Annotation, AudioFile } from '~/types/project'
 import type { WhisperResult } from '~/utils/whisper'
 import { storage } from '~/utils/storage'
 import { useAudioVisualizer } from '~/composables/useAudioVisualizer'
+import { useAudioPlayer, type LoadingPhase } from '~/composables/useAudioPlayer'
 import {
   AddCircleOutline as IconZoomIn,
   RemoveCircleOutline as IconZoomOut,
@@ -154,12 +170,17 @@ import {
   RemoveOutline as IconRemove
 } from '@vicons/ionicons5'
 import { useViewportStore } from '~/stores/viewport'
+import type { MessageReactive } from 'naive-ui'
+import { NSpin } from 'naive-ui'
+import { unref, toRef, toRefs } from 'vue'
+import { storeToRefs } from 'pinia'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
 const message = useMessage()
 const viewport = useViewportStore()
+
 // 添加缺失的响应式变量
 const transcribing = ref(false)
 const exporting = ref(false)
@@ -188,7 +209,10 @@ const {
   onAddButtonClick,
   onEditButtonClick,
   onDeleteButtonClick,
-  updateDrawing
+  updateDrawing,
+  // 添加加载状态
+  loadingPhase,
+  loadingProgress
 } = useAudioVisualizer()
 
 const waveformRef = ref<HTMLElement | null>(null)
@@ -229,6 +253,36 @@ const rules: FormRules = {
 }
 
 const showIcons = ref(false)
+
+const audioPlayer = useAudioPlayer()
+
+// 修改加载描述计算属性
+const loadingDescription = computed(() => {
+  const phaseText: Record<LoadingPhase, string> = {
+    idle: '准备加载',
+    downloading: '下载中',
+    decoding: '解码中',
+    ready: '加载完成'
+  }
+  
+  const phase = loadingPhase.value
+  const progress = loadingProgress.value
+  const text = phaseText[phase] || '加载中'
+  
+  if (phase === 'ready') return ''
+  
+  if (phase === 'downloading' && progress === 0) {
+    return text
+  }
+  
+  return `${text} ${progress.toFixed(1)}%`
+})
+
+// 修改加载状态计算属性
+const isLoading = computed({
+  get: () => loadingPhase.value !== 'ready',
+  set: () => {} // 模态框不需要双向绑定
+})
 
 // 修改倍速控制函数
 const handleIncreaseRate = () => {
@@ -289,49 +343,6 @@ const setupButtonCallbacks = () => {
       annotationToDelete.value = annotation
       showDeleteModal.value = true
     }
-  }
-}
-
-
-// 初始化函数
-const initializeVisualizer = async () => {
-  if (isInitialized.value || !waveformRef.value) return
-
-  const audioFile = projectStore.audioFiles.find(f => f.id === route.params.id)
-  if (!audioFile) {
-    message.error('音频文件不存在')
-    router.push('/')
-    return
-  }
-
-  try {
-    await initialize(
-      waveformRef.value, 
-      audioFile,
-      undefined,
-      async (annotation) => {
-        // 更新标注
-        await projectStore.updateAnnotation({
-          ...annotation,
-          audioFileId: currentAudioFile.value?.id || '',
-          text: annotation.text,
-          whisperText: '',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        await saveToStorage() // 自动保存
-        message.success('时间已更新') // 添加提示消息
-      }
-    )
-    isInitialized.value = true
-    // 加载已有标注
-    annotations.value.forEach(annotation => {
-      addRegion(annotation)
-    })
-    // 设置按钮回调
-    setupButtonCallbacks()
-  } catch (error) {
-    message.error('音频加载失败')
   }
 }
 
@@ -722,5 +733,31 @@ const minEndPercent = computed(() => {
 .annotation-actions,
 .annotation-text {
   display: none;
+}
+
+.page-container {
+  min-height: 100vh;
+  position: relative;
+}
+
+.loading-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+:deep(.n-card-header) {
+  text-align: center;
+  font-size: 16px;
+  padding: 12px 0;
+}
+
+:deep(.n-card__content) {
+  padding: 24px;
+}
+
+:deep(.n-spin) {
+  margin: 12px 0;
 }
 </style> 

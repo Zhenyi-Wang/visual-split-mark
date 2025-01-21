@@ -66,4 +66,10 @@ export interface EventHandler {
 // 回调函数类型
 export type RegionClickHandler = (id: string) => void
 export type AnnotationChangeHandler = (annotation: Region & { id: string }) => void
-export type ButtonClickHandler = (id?: string) => void 
+export type ButtonClickHandler = (id?: string) => void
+
+// 音频加载进度接口
+export interface AudioLoadProgress {
+  phase: 'idle' | 'downloading' | 'decoding' | 'ready'
+  progress: number
+} 

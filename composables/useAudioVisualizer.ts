@@ -310,6 +310,8 @@ export function useAudioVisualizer() {
     selectedRegion: computed(() => interactionHandler.selectedRegion.value),
     editingAnnotation,
     playbackRate: computed(() => audioPlayer.playbackRate.value),
+    loadingPhase: computed(() => audioPlayer.loadingPhase.value),
+    loadingProgress: computed(() => audioPlayer.loadingProgress.value),
 
     // 方法
     initialize,
