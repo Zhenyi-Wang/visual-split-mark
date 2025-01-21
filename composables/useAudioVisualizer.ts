@@ -30,6 +30,7 @@ export function useAudioVisualizer() {
   const selectedRegion = ref<{ start: number; end: number } | null>(null)
   const pixelsPerSecond = ref(50)
   const animationFrame = ref<number | null>(null)
+  const isDrawingRequested = ref(false)
   let clickStartTime = 0
 
   // 添加按钮区域信息
@@ -228,66 +229,74 @@ export function useAudioVisualizer() {
   const updateDrawing = async () => {
     if (!waveformDrawer.canvas.value) return
 
-    // 准备选区信息
-    const selectionRange = interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null
-      ? {
-          start: interactionHandler.selectionStart.value,
-          end: interactionHandler.selectionEnd.value
-        }
-      : null
+    // 如果已经请求了绘制，直接返回
+    if (isDrawingRequested.value) return
+    
+    isDrawingRequested.value = true
+    
+    // 使用 RAF 进行绘制
+    animationFrame.value = requestAnimationFrame(async () => {
+      isDrawingRequested.value = false
+      
+      // 准备选区信息
+      const selectionRange = interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null
+        ? {
+            start: interactionHandler.selectionStart.value,
+            end: interactionHandler.selectionEnd.value
+          }
+        : null
 
-    // 同步更新 selectedRegion
-    selectedRegion.value = selectionRange
+      // 同步更新 selectedRegion
+      selectedRegion.value = selectionRange
 
-    // 准备按钮边界信息
-    const buttonBounds = {
-      add: null,
-      edit: null,
-      delete: null
-    } as {
-      add: { x: number; y: number; width: number; height: number } | null;
-      edit: { x: number; y: number; width: number; height: number } | null;
-      delete: { x: number; y: number; width: number; height: number } | null;
-    }
+      // 准备按钮边界信息
+      const buttonBounds = {
+        add: null,
+        edit: null,
+        delete: null
+      } as {
+        add: { x: number; y: number; width: number; height: number } | null;
+        edit: { x: number; y: number; width: number; height: number } | null;
+        delete: { x: number; y: number; width: number; height: number } | null;
+      }
 
-    // 绘制波形
-    await waveformDrawer.drawWaveform(
-      audioPlayer.duration.value,
-      audioPlayer.currentTime.value,
-      pixelsPerSecond.value,
-      regionManager.getAllRegions(),
-      interactionHandler.hoveredRegion.value,
-      selectionRange,
-      editingAnnotation.value,
-      buttonBounds
-    )
+      // 绘制波形
+      await waveformDrawer.drawWaveform(
+        audioPlayer.duration.value,
+        audioPlayer.currentTime.value,
+        pixelsPerSecond.value,
+        regionManager.getAllRegions(),
+        interactionHandler.hoveredRegion.value,
+        selectionRange,
+        editingAnnotation.value,
+        buttonBounds
+      )
 
-    // 更新按钮边界引用
-    addButtonBounds.value = buttonBounds.add ? { ...buttonBounds.add } : null
-    editButtonBounds.value = buttonBounds.edit ? { ...buttonBounds.edit } : null
-    deleteButtonBounds.value = buttonBounds.delete ? { ...buttonBounds.delete } : null
+      // 更新按钮边界引用
+      addButtonBounds.value = buttonBounds.add ? { ...buttonBounds.add } : null
+      editButtonBounds.value = buttonBounds.edit ? { ...buttonBounds.edit } : null
+      deleteButtonBounds.value = buttonBounds.delete ? { ...buttonBounds.delete } : null
+    })
   }
 
   // 销毁函数
   const destroy = () => {
-    // 停止动画
+    // 取消未完成的动画帧
     if (animationFrame.value !== null) {
       cancelAnimationFrame(animationFrame.value)
       animationFrame.value = null
     }
-
-    // 移除窗口大小变化监听
+    
+    // 移除事件监听器
     if (waveformDrawer.canvas.value) {
       const resizeHandler = (waveformDrawer.canvas.value as any)._resizeHandler
       if (resizeHandler) {
         window.removeEventListener('resize', resizeHandler)
       }
     }
-
-    // 销毁音频播放器
+    
+    // 清理其他资源
     audioPlayer.destroy()
-
-    // 清理状态
     interactionHandler.clearAll()
     editingAnnotation.value = null
   }
