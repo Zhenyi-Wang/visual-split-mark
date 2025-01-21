@@ -1,6 +1,5 @@
 import { useMessage } from 'naive-ui'
 import { transcribeAudio, type WhisperResult } from '~/utils/whisper'
-import { loadBlob } from '~/utils/file'
 import type { Project, AudioFile, Annotation } from '~/types/project'
 
 export function useWhisper() {
@@ -17,14 +16,8 @@ export function useWhisper() {
       throw new Error('Whisper API URL not configured')
     }
 
-    // 加载音频文件
-    const blob = await loadBlob(audioFile.wavPath)
-    if (!blob) {
-      throw new Error('Failed to load audio file')
-    }
-
     // 调用 Whisper API
-    const result = await transcribeAudio(currentProject, blob)
+    const result = await transcribeAudio(currentProject, audioFile.wavPath)
 
     // 将识别结果转换为标注
     const annotations: Annotation[] = result.segments.map(segment => ({
@@ -38,10 +31,8 @@ export function useWhisper() {
       updatedAt: new Date()
     }))
 
-    // 保存标注
-    for (const annotation of annotations) {
-      await projectStore.updateAnnotation(annotation)
-    }
+    // 批量保存标注
+    await projectStore.updateAnnotations(annotations)
 
     return annotations
   }

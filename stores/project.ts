@@ -87,7 +87,7 @@ export const useProjectStore = defineStore('project', {
       this.currentAudioFile = audioFile
     },
 
-    async createProject(name: string, description?: string) {
+    async createProject(name: string, description?: string, whisperApiUrl?: string) {
       this.loading = true
       this.error = null
       try {
@@ -95,6 +95,7 @@ export const useProjectStore = defineStore('project', {
           id: crypto.randomUUID(),
           name,
           description,
+          whisperApiUrl,
           createdAt: new Date(),
           updatedAt: new Date()
         }
@@ -244,6 +245,29 @@ export const useProjectStore = defineStore('project', {
         }
       } catch (error) {
         console.error('Failed to delete annotation:', error)
+        this.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async updateAnnotations(annotations: Annotation[]) {
+      this.loading = true
+      this.error = null
+      try {
+        // 更新或添加每个标注
+        for (const annotation of annotations) {
+          const index = this.annotations.findIndex(a => a.id === annotation.id)
+          if (index > -1) {
+            this.annotations[index] = annotation
+          } else {
+            this.annotations.push(annotation)
+          }
+        }
+        await this.saveAll()
+      } catch (error) {
+        console.error('Failed to update annotations:', error)
         this.error = error instanceof Error ? error.message : String(error)
         throw error
       } finally {

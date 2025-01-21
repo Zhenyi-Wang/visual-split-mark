@@ -174,12 +174,17 @@ const handleSubmit = () => {
             id: formModel.value.id,
             name: formModel.value.name,
             description: formModel.value.description,
+            whisperApiUrl: formModel.value.whisperApiUrl,
             createdAt: new Date(), // 这个值会被 store 忽略
             updatedAt: new Date()
           })
           message.success('项目已更新')
         } else {
-          await projectStore.createProject(formModel.value.name, formModel.value.description)
+          await projectStore.createProject(
+            formModel.value.name, 
+            formModel.value.description,
+            formModel.value.whisperApiUrl
+          )
           message.success('项目已创建')
         }
         handleCancel()

@@ -1,7 +1,6 @@
 import type { Project } from '~/types/project'
 
 export interface WhisperResult {
-  text: string
   segments: Array<{
     start: number
     end: number
@@ -9,21 +8,25 @@ export interface WhisperResult {
   }>
 }
 
-export async function transcribeAudio(project: Project, audioBlob: Blob): Promise<WhisperResult> {
+export async function transcribeAudio(project: Project, audioPath: string): Promise<WhisperResult> {
   if (!project.whisperApiUrl) {
     throw new Error('Whisper API URL not configured')
   }
 
-  const formData = new FormData()
-  formData.append('audio', audioBlob, 'audio.wav')
-
-  const response = await fetch(project.whisperApiUrl, {
+  const response = await fetch('/api/whisper/transcribe', {
     method: 'POST',
-    body: formData
+    body: JSON.stringify({
+      audioPath,
+      whisperApiUrl: project.whisperApiUrl
+    }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
   })
 
   if (!response.ok) {
-    throw new Error(`Whisper API error: ${response.statusText}`)
+    const errorText = await response.text()
+    throw new Error(errorText)
   }
 
   return response.json()

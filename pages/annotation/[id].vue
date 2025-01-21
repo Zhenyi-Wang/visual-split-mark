@@ -163,6 +163,7 @@ import type { WhisperResult } from '~/utils/whisper'
 import { storage } from '~/utils/storage'
 import { useAudioVisualizer } from '~/composables/useAudioVisualizer'
 import { useAudioPlayer, type LoadingPhase } from '~/composables/useAudioPlayer'
+import { useWhisper } from '~/composables/useWhisper'
 import {
   AddCircleOutline as IconZoomIn,
   RemoveCircleOutline as IconZoomOut,
@@ -180,6 +181,7 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const message = useMessage()
 const viewport = useViewportStore()
+const { transcribe } = useWhisper()
 
 // 添加缺失的响应式变量
 const transcribing = ref(false)
@@ -354,7 +356,18 @@ onMounted(async () => {
     router.push('/')
     return
   }
+  
+  // 设置当前音频文件
   projectStore.setCurrentAudioFile(audioFile)
+  
+  // 设置当前项目
+  const project = projectStore.projects.find(p => p.id === audioFile.projectId)
+  if (!project) {
+    message.error('项目不存在')
+    router.push('/')
+    return
+  }
+  projectStore.setCurrentProject(project)
   
   // 初始化波形图
   if (!isInitialized.value && waveformRef.value) {
@@ -504,12 +517,12 @@ const handleTranscribe = async () => {
   transcribing.value = true
   try {
     const annotations = await transcribe(currentAudioFile.value)
-    // 更新标注
-    for (const annotation of annotations) {
+    // 一次性添加所有区域
+    clearRegions() // 先清除现有区域
+    annotations.forEach(annotation => {
       addRegion(annotation)
-      await projectStore.updateAnnotation(annotation)
-    }
-    message.success('文本识别完成')
+    })
+    message.success(`文本识别完成，共识别出 ${annotations.length} 个片段`)
   } catch (error) {
     message.error('文本识别失败')
   } finally {
@@ -589,17 +602,6 @@ watch(() => projectStore.audioFileAnnotations, (newAnnotations) => {
     addRegion(annotation)
   })
 }, { deep: true })
-
-// 修改 transcribe 函数
-const transcribe = async (audioFile: AudioFile): Promise<Annotation[]> => {
-  if (!currentProject.value?.whisperApiUrl) {
-    throw new Error('Whisper API URL not configured')
-  }
-
-  // TODO: 实现 Whisper API 调用
-  // 返回一个空数组作为示例
-  return []
-}
 
 // 修改 exportAnnotations 函数
 const exportAnnotations = async (audioFile: AudioFile) => {

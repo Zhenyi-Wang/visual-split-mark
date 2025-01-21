@@ -5,6 +5,7 @@
 - Naive UI
 - Pinia
 - JSON 文件存储
+- yarn 管理依赖
 
 ## Lessons
 1. 状态管理和 API 设计
