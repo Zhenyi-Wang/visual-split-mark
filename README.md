@@ -1,99 +1,106 @@
 # Visual Split Mark
 
-一个用于音频标注的工具，支持波形可视化、区域选择和文本标注。
+[English](README_EN.md) | 简体中文
 
-## 功能特点
+一个专门用于制作 Whisper 模型微调数据集的音频标注工具。通过直观的可视化界面，帮助用户快速准确地创建高质量的语音识别训练数据。
 
-- 音频波形可视化
-- 区域选择和标注
-- 文本识别（需配置 Whisper API）
-- 标注导出
-- 自动保存
+## 项目说明
 
-## 标注操作
+本项目主要用于生成 [Whisper-Finetune](https://github.com/yeyupiaoling/Whisper-Finetune) 项目所需的微调数据集。为了提高标注效率，项目集成了 Whisper 转录功能，可以先通过 Whisper 进行初步转录，再进行人工校正。如果你需要一个简单的 Whisper API 服务，可以参考 [whisper-api](https://github.com/Zhenyi-Wang/whisper-api) 项目。
 
-### 区域选择
-- 在波形区域拖动鼠标进行选择
-- 选择后可以点击添加按钮创建标注
-- 可以通过拖动区域边界调整时间范围
+## 主要功能
 
-### 标注编辑
-- 鼠标悬停在标注区域时，右上角会显示编辑和删除按钮
-- 点击编辑按钮可以修改标注文本
-- 点击删除按钮可以删除标注
-- 拖动标注区域的上下边界可以调整时间范围
+### 音频可视化与标注
+- 波形可视化显示
+- 区域选择和时间调整
+- 文本标注和编辑
+- 支持 Whisper API 文本识别
+- 自动保存标注数据
 
 ### 播放控制
-- 点击播放按钮或按空格键播放/暂停
-- 可以调整播放速度（0.5x - 5x）
-- 点击标注区域可以跳转到对应时间点
+- 空格键快捷播放/暂停
+- 可调节播放速度（0.5x - 5x）
+- 点击标注区域快速定位
+- 波形缩放控制（像素/秒可调）
 
-### 视图控制
-- 使用缩放按钮调整波形显示比例
-- 可以查看当前的像素/秒比例
+### 数据导出
+- 符合 Whisper-Finetune 格式要求
+- JSONL 格式数据文件
+- 自动分割音频片段
+- 导出进度实时显示
 
-## 快捷键
+## 快速开始
 
-- 空格键：播放/暂停
-
-## 开发
-
-### 安装依赖
-
+### 安装
 ```bash
 yarn install
 ```
 
-### 开发服务器
-
+### 运行
 ```bash
+# 开发模式
 yarn dev
-```
 
-### 构建
-
-```bash
+# 构建部署
 yarn build
 ```
 
-## 配置
+### 配置 Whisper API
+在项目设置中配置 Whisper API URL 以启用文本识别功能。推荐使用 [whisper-api](https://github.com/Zhenyi-Wang/whisper-api) 作为后端服务。
 
-### Whisper API
+## 使用说明
 
-在项目设置中配置 Whisper API URL 以启用文本识别功能。
+### 标注流程
+1. 创建项目并上传音频文件
+2. 可选：使用 Whisper API 进行初步转录
+3. 通过波形界面选择音频片段
+4. 添加或编辑文本标注
+5. 导出数据集
 
-## 数据存储
+### 标注操作
+- **区域选择**：在波形区域拖动鼠标
+- **时间调整**：拖动区域边界
+- **文本编辑**：点击标注区域右上角的编辑按钮
+- **删除标注**：点击标注区域右上角的删除按钮
 
-- 项目数据存储在 `storage/data` 目录下
-- 包含项目信息、音频文件和标注数据
-- 所有修改会自动保存
+### 快捷键
+- 空格键：播放/暂停
+- 更多快捷键正在开发中...
 
-## 导出数据格式
+## 数据格式
 
-导出的数据集位于 `storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/` 目录下，包含以下内容：
+### 存储结构
+- 项目数据：`storage/data/`
+- 导出数据：`storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/`
 
-### 目录结构
-
+### 导出格式
 ```
-storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/
+项目导出目录/
 ├── dataset/                # 音频片段目录
 │   ├── uuid1.wav          # 音频片段文件
 │   ├── uuid2.wav
 │   └── ...
-└── dataset.json           # 数据集描述文件
+└── dataset.json           # 数据集描述文件（JSONL格式）
 ```
 
 ### dataset.json 格式
-
-dataset.json 采用 JSONL（JSON Lines）格式，每行是一个独立的 JSON 对象，描述一个音频片段：
-
 ```jsonl
 {"audio":{"path":"dataset/uuid1.wav"},"sentence":"标注文本","language":"Chinese","duration":2.34}
-{"audio":{"path":"dataset/uuid2.wav"},"sentence":"标注文本","language":"Chinese","duration":1.56}
 ```
 
-每个 JSON 对象包含以下字段：
-- `audio.path`: 音频文件的相对路径
-- `sentence`: 标注的文本内容
+字段说明：
+- `audio.path`: 音频文件相对路径
+- `sentence`: 标注文本内容
 - `language`: 文本语言（固定为 "Chinese"）
-- `duration`: 音频片段时长（单位：秒，保留 2 位小数）
+- `duration`: 音频片段时长（秒，保留 2 位小数）
+
+## 开发计划
+
+- [ ] 添加更多快捷键支持
+- [ ] 优化音频处理性能
+- [ ] 增加批量操作功能
+- [ ] 支持更多音频格式
+
+## 贡献
+
+目前项目已完成基本功能，欢迎试用并提出改进建议。后续会根据实际使用情况持续优化。如果你有任何想法或建议，欢迎提出 Issue 或 Pull Request。
