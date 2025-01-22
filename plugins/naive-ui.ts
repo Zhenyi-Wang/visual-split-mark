@@ -33,7 +33,9 @@ import {
   NScrollbar,
   NUpload,
   NPageHeader,
-  NTag
+  NTag,
+  NResult,
+  NSpin
 } from 'naive-ui'
 
 // 导入图标组件
@@ -72,7 +74,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       NScrollbar,
       NUpload,
       NPageHeader,
-      NTag
+      NTag,
+      NResult,
+      NSpin
     ]
   })
 

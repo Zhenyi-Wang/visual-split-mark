@@ -67,3 +67,33 @@ yarn build
 - 项目数据存储在 `storage/data` 目录下
 - 包含项目信息、音频文件和标注数据
 - 所有修改会自动保存
+
+## 导出数据格式
+
+导出的数据集位于 `storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/` 目录下，包含以下内容：
+
+### 目录结构
+
+```
+storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/
+├── dataset/                # 音频片段目录
+│   ├── uuid1.wav          # 音频片段文件
+│   ├── uuid2.wav
+│   └── ...
+└── dataset.json           # 数据集描述文件
+```
+
+### dataset.json 格式
+
+dataset.json 采用 JSONL（JSON Lines）格式，每行是一个独立的 JSON 对象，描述一个音频片段：
+
+```jsonl
+{"audio":{"path":"dataset/uuid1.wav"},"sentence":"标注文本","language":"Chinese","duration":2.34}
+{"audio":{"path":"dataset/uuid2.wav"},"sentence":"标注文本","language":"Chinese","duration":1.56}
+```
+
+每个 JSON 对象包含以下字段：
+- `audio.path`: 音频文件的相对路径
+- `sentence`: 标注的文本内容
+- `language`: 文本语言（固定为 "Chinese"）
+- `duration`: 音频片段时长（单位：秒，保留 2 位小数）

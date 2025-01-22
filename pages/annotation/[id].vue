@@ -19,11 +19,10 @@
             <n-button 
               type="primary" 
               ghost 
-              @click="handleExport" 
-              :loading="exporting"
+              @click="showExportModal = true" 
               :disabled="!annotations.length"
             >
-              导出
+              导出数据集
             </n-button>
           </n-space>
         </template>
@@ -42,7 +41,7 @@
                 </client-only>
               </template>
             </n-button>
-            <n-text style="line-height: 34px;">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</n-text>
+            <n-text style="line-height: 34px;">{{ formatDuration(currentTime) }} / {{ formatDuration(duration) }}</n-text>
             <n-divider vertical style="height: 24px; margin: 5px 0;" />
             <n-button-group>
               <n-button @click="handleDecreaseRate" style="height: 34px;">
@@ -59,7 +58,7 @@
             </n-button-group>
             <n-divider vertical style="height: 24px; margin: 5px 0;" />
             <n-text v-if="selectedRegion" style="line-height: 34px;">
-              选中区间：{{ formatTime(selectedRegion.start) }} - {{ formatTime(selectedRegion.end) }}
+              选中区间：{{ formatDuration(selectedRegion.start) }} - {{ formatDuration(selectedRegion.end) }}
             </n-text>
             <n-divider v-if="selectedRegion" vertical style="height: 24px; margin: 5px 0;" />
             <n-button-group>
@@ -86,7 +85,7 @@
                 size="small"
                 style="width: 80px;"
               />
-              <n-text>% ({{ formatTime(viewport.startTime) }})</n-text>
+              <n-text>% ({{ formatDuration(viewport.startTime) }})</n-text>
               <n-text>-</n-text>
               <n-input-number
                 v-model:value="viewportEndPercent"
@@ -96,7 +95,7 @@
                 size="small"
                 style="width: 80px;"
               />
-              <n-text>% ({{ formatTime(viewport.endTime) }})</n-text>
+              <n-text>% ({{ formatDuration(viewport.endTime) }})</n-text>
             </n-space>
           </n-space>
         </div>
@@ -150,6 +149,56 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- 导出部分 -->
+    <n-modal
+      v-model:show="showExportModal"
+      preset="card"
+      title="导出数据集"
+      style="width: 500px;"
+      :bordered="false"
+      :segmented="{ content: true }"
+    >
+      <n-space vertical>
+        <template v-if="status === 'idle' || status === 'exporting'">
+          <n-progress
+            type="line"
+            :percentage="progress"
+            :show-indicator="true"
+            :processing="true"
+            indicator-placement="inside"
+          >
+            正在导出 {{ progress }}%
+          </n-progress>
+        </template>
+
+        <template v-else-if="status === 'completed'">
+          <n-result
+            status="success"
+            title="导出成功"
+            description="数据集已导出到服务器："
+          >
+            <template #footer>
+              <n-text code>{{ exportPath }}</n-text>
+            </template>
+          </n-result>
+        </template>
+
+        <template v-else-if="status === 'failed'">
+          <n-result
+            status="error"
+            title="导出失败"
+            :description="exportError"
+          />
+        </template>
+      </n-space>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="handleCloseExport">{{ status === 'completed' ? '完成' : '取消' }}</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -175,6 +224,19 @@ import type { MessageReactive } from 'naive-ui'
 import { NSpin } from 'naive-ui'
 import { unref, toRef, toRefs } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useExport } from '~/composables/useExport'
+
+// 格式化音频时长（秒数）
+const formatDuration = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+}
+
+// 格式化时间戳
+const formatTimestamp = (time: Date) => {
+  return format(time, 'yyyy-MM-dd HH:mm:ss')
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -435,12 +497,6 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 }
 
-const formatTime = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = Math.floor(seconds % 60)
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
-
 const handleBack = () => {
   if (currentAudioFile.value) {
     router.push(`/project/${currentAudioFile.value.projectId}`)
@@ -530,16 +586,42 @@ const handleTranscribe = async () => {
   }
 }
 
-const handleExport = async () => {
-  if (!currentAudioFile.value || !annotations.value.length) return
-  exporting.value = true
-  try {
-    await exportAnnotations(currentAudioFile.value)
-    message.success('导出成功')
-  } catch (error) {
-    message.error('导出失败')
-  } finally {
-    exporting.value = false
+// 导出相关的状态
+const showExportModal = ref(false)
+const { exportAnnotations, progress, status } = useExport()
+const exportPath = ref('')
+const exportError = ref('')
+
+// 监听模态框显示状态，显示时自动开始导出
+watch(showExportModal, async (show) => {
+  if (show) {
+    if (!currentProject.value || !currentAudioFile.value) {
+      message.error('当前项目或音频文件不存在')
+      showExportModal.value = false
+      return
+    }
+
+    try {
+      const result = await exportAnnotations(
+        currentProject.value.name,
+        currentAudioFile.value
+      )
+      if (result) {
+        exportPath.value = result.path
+      }
+    } catch (error) {
+      exportError.value = error instanceof Error ? error.message : '导出失败'
+      message.error('导出失败：' + exportError.value)
+    }
+  }
+})
+
+// 处理关闭模态框
+const handleCloseExport = () => {
+  showExportModal.value = false
+  if (status.value === 'completed' || status.value === 'failed') {
+    exportPath.value = ''
+    exportError.value = ''
   }
 }
 
@@ -603,44 +685,16 @@ watch(() => projectStore.audioFileAnnotations, (newAnnotations) => {
   })
 }, { deep: true })
 
-// 修改 exportAnnotations 函数
-const exportAnnotations = async (audioFile: AudioFile) => {
-  if (!annotations.value.length) return
-
-  // 准备导出数据
-  const exportData = {
-    audioFile: {
-      id: audioFile.id,
-      originalName: audioFile.originalName,
-      duration: audioFile.duration
-    },
-    annotations: annotations.value.map(annotation => ({
-      id: annotation.id,
-      start: annotation.start,
-      end: annotation.end,
-      text: annotation.text,
-      whisperText: annotation.whisperText,
-      createdAt: annotation.createdAt,
-      updatedAt: annotation.updatedAt
-    }))
+// 在文件管理器中显示
+const showInFileManager = async (path: string) => {
+  try {
+    await $fetch('/api/file/show', {
+      method: 'POST',
+      body: { path }
+    })
+  } catch (error) {
+    message.error('无法打开文件夹')
   }
-
-  // 创建 Blob 对象
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-  
-  // 创建下载链接
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `annotations_${audioFile.originalName}.json`
-  
-  // 触发下载
-  document.body.appendChild(link)
-  link.click()
-  
-  // 清理
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
 }
 
 // 修改渲染范围控制相关的计算属性
@@ -761,5 +815,9 @@ const minEndPercent = computed(() => {
 
 :deep(.n-spin) {
   margin: 12px 0;
+}
+
+.mt-4 {
+  margin-top: 1rem;
 }
 </style> 
