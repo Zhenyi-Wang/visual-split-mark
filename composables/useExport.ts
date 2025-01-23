@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { useMessage } from 'naive-ui'
-import { exportManager, progressEmitter } from '../utils/export'
+import { exportManager } from '../utils/export'
 import type { AudioFile, Annotation } from '../types/project'
 import { useProjectStore } from '../stores/project'
 
@@ -29,7 +29,10 @@ export function useExport() {
       const result = await exportManager.exportFile(
         projectName,
         audioFile,
-        annotations
+        annotations,
+        (value) => {
+          progress.value = value
+        }
       )
       
       status.value = 'completed'
@@ -42,11 +45,6 @@ export function useExport() {
       throw error
     }
   }
-  
-  // 监听导出进度
-  progressEmitter.on('progress', (dirname: string, value: number) => {
-    progress.value = value
-  })
   
   return {
     exportAnnotations,
