@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { rm } from 'node:fs/promises'
-import { format } from 'date-fns'
 import { resolve } from 'node:path'
 import { audioProcessor } from '~/utils/audio'
 import type { AudioFile, Annotation } from '~/types/project'
@@ -9,13 +8,10 @@ import { progressEmitter } from '../../utils/progress'
 import { loadFile } from '../../utils/file'
 
 export default defineEventHandler(async (event): Promise<ExportResponse> => {
-  const { projectName, audioFile, annotations } = await readBody(event)
+  const { exportId, projectName, audioFile, annotations } = await readBody(event)
   
-  // 生成导出目录名
-  const timestamp = format(new Date(), 'yyyyMMdd_HHmmss')
-  const sanitizedProjectName = projectName.replace(/[^a-zA-Z0-9\-_]/g, '_')
-  const sanitizedFileName = audioFile.originalName.replace(/[^a-zA-Z0-9\-_]/g, '_')
-  const dirname = `${timestamp}_${sanitizedProjectName}_${sanitizedFileName}`
+  // 使用传入的 exportId 作为目录名
+  const dirname = exportId
   const exportPath = resolve(process.cwd(), 'storage/exports', dirname)
   const datasetPath = resolve(exportPath, 'dataset')
 
