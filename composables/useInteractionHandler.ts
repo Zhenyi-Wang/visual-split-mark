@@ -623,7 +623,10 @@ export function useInteractionHandler() {
             }
           }
 
-          clearInteractionState()
+          // 只清除拖动相关状态
+          dragInfo.value = null
+          isDragging.value = false
+          interactionMode.value = 'idle'
           return result
         }
         break
@@ -636,13 +639,20 @@ export function useInteractionHandler() {
             const time = transform.getTimeFromX(x)
             seek(time)
             clearSelection()
+          } else {
+            // 完成选区创建，只重置拖动状态
+            dragStartX.value = null
+            interactionMode.value = 'idle'
           }
+          return { type: 'selection' }
         }
         break
     }
 
-    // 重置状态
-    clearInteractionState()
+    // 只在非创建模式时清除所有状态
+    if (interactionMode.value !== 'creating') {
+      clearInteractionState()
+    }
   }
 
   // 处理鼠标离开事件
