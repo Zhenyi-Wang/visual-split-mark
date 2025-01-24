@@ -1,4 +1,4 @@
-import { ref, computed, nextTick, readonly } from 'vue'
+import { ref, computed, nextTick, readonly, unref } from 'vue'
 import type { AudioFile } from '~/types/project'
 import type {
   Region,
@@ -308,6 +308,22 @@ export function useAudioVisualizer() {
     editingAnnotation.value = null
   }
 
+  const setScrollPosition = (container: HTMLElement, targetScroll: number, retries = 0) => {
+    if (retries > 5) return // 最多重试5次
+
+    container.scrollTo({
+      left: targetScroll,
+      behavior: 'instant'
+    })
+
+    // 检查滚动位置是否设置成功
+    setTimeout(() => {
+      if (Math.abs(container.scrollLeft - targetScroll) > 1) {
+        setScrollPosition(container, targetScroll, retries + 1)
+      }
+    }, 16) // 等待一帧的时间
+  }
+
   return {
     // 状态
     isPlaying: computed(() => audioPlayer.isPlaying.value),
@@ -326,12 +342,102 @@ export function useAudioVisualizer() {
     playPause: audioPlayer.playPause,
     seek: audioPlayer.seek,
     zoomIn: async () => {
-      pixelsPerSecond.value = Math.min(pixelsPerSecond.value * 1.5, 1000)
-      await updateDrawing();
+      if (!waveformDrawer.canvas.value) return
+      
+      const oldPixelsPerSecond = pixelsPerSecond.value
+      const newPixelsPerSecond = Math.min(oldPixelsPerSecond * 1.5, 1000)
+      
+      // 获取正确的滚动容器
+      const container = waveformDrawer.canvas.value.parentElement?.parentElement
+      if (!container || !container.classList.contains('waveform-container')) return
+      
+      // 计算当前播放时间相对于渲染范围的比例
+      const startTime = unref(viewport.startTime)
+      const endTime = unref(viewport.endTime)
+      const viewCenter = audioPlayer.currentTime.value
+      
+      // 更新缩放比例
+      pixelsPerSecond.value = newPixelsPerSecond
+      
+      await updateDrawing()
+      await nextTick()
+      
+      // 计算实际的波形图宽度（不包括内边距）
+      const waveformWidth = (endTime - startTime) * newPixelsPerSecond
+      const containerWidth = container.clientWidth
+      
+      // 计算目标滚动位置：将当前播放位置放在容器中心
+      const currentTimePosition = (viewCenter - startTime) * newPixelsPerSecond + PADDING
+      const targetScroll = Math.max(0, 
+        Math.min(
+          waveformWidth + PADDING * 2 - containerWidth,  // 最大滚动范围
+          currentTimePosition - containerWidth / 2        // 当前位置居中
+        )
+      )
+      
+      // 设置滚动位置并确保成功
+      setScrollPosition(container, targetScroll)
+      
+      console.log('Zoom Debug:', {
+        viewCenter,
+        startTime,
+        endTime,
+        waveformWidth,
+        containerWidth,
+        currentTimePosition,
+        targetScroll,
+        padding: PADDING,
+        container: container.className
+      })
     },
     zoomOut: async () => {
-      pixelsPerSecond.value = Math.max(pixelsPerSecond.value / 1.5, 10)
-      await updateDrawing();
+      if (!waveformDrawer.canvas.value) return
+      
+      const oldPixelsPerSecond = pixelsPerSecond.value
+      const newPixelsPerSecond = Math.max(oldPixelsPerSecond / 1.5, 10)
+      
+      // 获取正确的滚动容器
+      const container = waveformDrawer.canvas.value.parentElement?.parentElement
+      if (!container || !container.classList.contains('waveform-container')) return
+      
+      // 计算当前播放时间相对于渲染范围的比例
+      const startTime = unref(viewport.startTime)
+      const endTime = unref(viewport.endTime)
+      const viewCenter = audioPlayer.currentTime.value
+      
+      // 更新缩放比例
+      pixelsPerSecond.value = newPixelsPerSecond
+      
+      await updateDrawing()
+      await nextTick()
+      
+      // 计算实际的波形图宽度（不包括内边距）
+      const waveformWidth = (endTime - startTime) * newPixelsPerSecond
+      const containerWidth = container.clientWidth
+      
+      // 计算目标滚动位置：将当前播放位置放在容器中心
+      const currentTimePosition = (viewCenter - startTime) * newPixelsPerSecond + PADDING
+      const targetScroll = Math.max(0, 
+        Math.min(
+          waveformWidth + PADDING * 2 - containerWidth,  // 最大滚动范围
+          currentTimePosition - containerWidth / 2        // 当前位置居中
+        )
+      )
+      
+      // 设置滚动位置并确保成功
+      setScrollPosition(container, targetScroll)
+      
+      console.log('Zoom Debug:', {
+        viewCenter,
+        startTime,
+        endTime,
+        waveformWidth,
+        containerWidth,
+        currentTimePosition,
+        targetScroll,
+        padding: PADDING,
+        container: container.className
+      })
     },
     addRegion: regionManager.addRegion,
     updateRegion: regionManager.updateRegion,
