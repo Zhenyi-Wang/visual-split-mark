@@ -650,7 +650,6 @@ const handleConfirmAnnotation = async () => {
   
   // 更新标注
   await projectStore.updateAnnotation(annotation)
-  await saveToStorage() // 自动保存
   
   if (isNewAnnotation) {
     // 如果是新建标注
