@@ -9,7 +9,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "clean": "rm -rf .nuxt .output node_modules/.vite",
+    "clean:dev": "yarn clean && yarn dev"
   },
   "dependencies": {
     "@css-render/vue3-ssr": "^0.15.14",
