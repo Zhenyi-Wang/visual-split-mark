@@ -19,6 +19,12 @@ import { useCoordinateTransform } from './useCoordinateTransform'
 import { useViewportStore } from '~/stores/viewport'
 import { getWaveformYRange, getAnnotationYRange } from '~/utils/timeFormat'
 
+// 定义鼠标事件处理返回值类型
+type MouseUpResult = 
+  | { type: 'annotation'; data: { current: Region & { id: string }; adjacent?: Region & { id: string } } }
+  | { type: 'selection' }
+  | undefined
+
 export function useInteractionHandler() {
   // 交互模式类型定义
   type InteractionMode = 
@@ -560,7 +566,7 @@ export function useInteractionHandler() {
     canvas: HTMLCanvasElement,
     duration: number,
     seek?: (time: number) => void
-  ) => {
+  ): MouseUpResult => {
     const transform = createTransform(canvas)
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
