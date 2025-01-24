@@ -5,6 +5,7 @@ export interface RegionInfo {
   id: string
   isHandle: 'start' | 'end' | null
   isTextArea: boolean
+  handleMode: 'both' | 'single' | 'none'
 }
 
 // 区域数据接口
@@ -12,6 +13,9 @@ export interface Region {
   start: number
   end: number
   text: string
+  whisperText?: string
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 // 按钮边界接口

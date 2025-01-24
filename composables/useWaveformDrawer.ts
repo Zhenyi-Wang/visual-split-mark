@@ -118,6 +118,7 @@ export const useWaveformDrawer = () => {
     pixelsPerSecond: number,
     regions: Map<string, Region>,
     hoveredRegion: { id: string } | null,
+    adjacentRegion: { id: string; region: Region } | null,
     selectionRange: { start: number; end: number } | null,
     editingAnnotation: { id: string } | null,
     buttonBounds: {
@@ -256,7 +257,7 @@ export const useWaveformDrawer = () => {
     }
 
     // 绘制区域
-    drawRegions(regions, hoveredRegion, editingAnnotation, duration, pixelsPerSecond, buttonBounds)
+    drawRegions(regions, hoveredRegion, adjacentRegion, editingAnnotation, duration, pixelsPerSecond, buttonBounds)
 
     // 绘制选区
     if (selectionRange) {
@@ -356,6 +357,7 @@ export const useWaveformDrawer = () => {
   const drawRegions = (
     regions: Map<string, Region>,
     hoveredRegion: { id: string } | null,
+    adjacentRegion: { id: string; region: Region } | null,
     editingAnnotation: { id: string } | null,
     duration: number,
     pixelsPerSecond: number,
@@ -388,6 +390,7 @@ export const useWaveformDrawer = () => {
       }
 
       const isHovered = hoveredRegion?.id === id
+      const isAdjacent = adjacentRegion?.id === id
       const isEditing = editingAnnotation?.id === id
 
       // 计算区域在视口中的位置
@@ -396,7 +399,7 @@ export const useWaveformDrawer = () => {
       const width = endX - startX
 
       // 绘制波形区域背景
-      ctx.fillStyle = isHovered ? COLORS.region.fill.hover : COLORS.region.fill.normal
+      ctx.fillStyle = isHovered || isAdjacent ? COLORS.region.fill.hover : COLORS.region.fill.normal
       ctx.fillRect(
         startX,
         timeAxisHeight,
@@ -405,8 +408,8 @@ export const useWaveformDrawer = () => {
       )
 
       // 绘制波形区域边框
-      ctx.strokeStyle = isEditing ? COLORS.region.border.editing : COLORS.region.border.normal
-      ctx.lineWidth = isEditing ? 2 : 1
+      ctx.strokeStyle = isEditing ? COLORS.region.border.editing : (isHovered || isAdjacent ? COLORS.region.border.hover : COLORS.region.border.normal)
+      ctx.lineWidth = isEditing || isHovered || isAdjacent ? 2 : 1
       ctx.strokeRect(
         startX,
         timeAxisHeight,
@@ -416,20 +419,157 @@ export const useWaveformDrawer = () => {
 
       // 如果是悬停状态，绘制控制点
       if (isHovered) {
-        // 绘制左侧控制点
+        // 检查是否有相邻标注
+        let hasLeftAdjacent = false
+        let hasRightAdjacent = false
+        for (const [otherId, otherRegion] of regions.entries()) {
+          if (otherId === id) continue
+          if (Math.abs(otherRegion.end - region.start) < 0.01) {
+            hasLeftAdjacent = true
+          }
+          if (Math.abs(otherRegion.start - region.end) < 0.01) {
+            hasRightAdjacent = true
+          }
+        }
+
+        // 判断相邻标注情况
+        const hasBothAdjacent = hasLeftAdjacent && hasRightAdjacent
+        const hasAnyAdjacent = hasLeftAdjacent || hasRightAdjacent
+        const hasNoAdjacent = !hasLeftAdjacent && !hasRightAdjacent
+
+        // 绘制上半区域手柄（整体调节）
         ctx.beginPath()
         ctx.fillStyle = COLORS.region.handle.fill
         ctx.strokeStyle = COLORS.region.handle.stroke
         ctx.lineWidth = 2
-        ctx.arc(startX, timeAxisHeight + waveformHeight / 2, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+        
+        // 左侧手柄
+        ctx.beginPath()
+        if (hasLeftAdjacent) {
+          // 方形手柄
+          ctx.rect(
+            startX - HANDLE_VISUAL_SIZE,
+            timeAxisHeight + waveformHeight / 4 - HANDLE_VISUAL_SIZE,
+            HANDLE_VISUAL_SIZE * 2,
+            HANDLE_VISUAL_SIZE * 2
+          )
+        } else {
+          // 圆形手柄
+          ctx.arc(startX, timeAxisHeight + waveformHeight / 4, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+        }
+        ctx.fill()
+        ctx.stroke()
+        
+        // 右侧手柄
+        ctx.beginPath()
+        if (hasRightAdjacent) {
+          // 方形手柄
+          ctx.rect(
+            endX - HANDLE_VISUAL_SIZE,
+            timeAxisHeight + waveformHeight / 4 - HANDLE_VISUAL_SIZE,
+            HANDLE_VISUAL_SIZE * 2,
+            HANDLE_VISUAL_SIZE * 2
+          )
+        } else {
+          // 圆形手柄
+          ctx.arc(endX, timeAxisHeight + waveformHeight / 4, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+        }
         ctx.fill()
         ctx.stroke()
 
-        // 绘制右侧控制点
-        ctx.beginPath()
-        ctx.arc(endX, timeAxisHeight + waveformHeight / 2, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.stroke()
+        // 上半区域提示（只在有相邻标注时显示）
+        if (hasAnyAdjacent) {
+          ctx.fillStyle = COLORS.text.secondary
+          ctx.font = '12px Arial'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(
+            '整体调节',
+            (startX + endX) / 2,
+            timeAxisHeight + waveformHeight / 4 - HANDLE_VISUAL_SIZE - 5
+          )
+        }
+
+        // 绘制下半区域手柄（单独调节）
+        // 当两边都有相邻标注，或者只有一边有相邻标注时显示
+        if (hasBothAdjacent || hasAnyAdjacent) {
+          ctx.fillStyle = COLORS.region.handle.fill
+          ctx.strokeStyle = COLORS.region.handle.stroke
+          ctx.lineWidth = 1
+
+          // 保存当前绘图状态
+          ctx.save()
+          
+          // 创建裁剪区域（标注区域）
+          ctx.beginPath()
+          ctx.rect(startX, timeAxisHeight, width, waveformHeight)
+          ctx.clip()
+
+          // 绘制左侧手柄（方形）
+          ctx.beginPath()
+          ctx.rect(
+            startX - HANDLE_VISUAL_SIZE,
+            timeAxisHeight + waveformHeight * 3/4 - HANDLE_VISUAL_SIZE,
+            HANDLE_VISUAL_SIZE * 2,
+            HANDLE_VISUAL_SIZE * 2
+          )
+          ctx.fill()
+          ctx.stroke()
+
+          // 绘制右侧手柄（方形）
+          ctx.beginPath()
+          ctx.rect(
+            endX - HANDLE_VISUAL_SIZE,
+            timeAxisHeight + waveformHeight * 3/4 - HANDLE_VISUAL_SIZE,
+            HANDLE_VISUAL_SIZE * 2,
+            HANDLE_VISUAL_SIZE * 2
+          )
+          ctx.fill()
+          ctx.stroke()
+
+          // 恢复绘图状态
+          ctx.restore()
+
+          // 添加下半区域提示
+          ctx.fillStyle = COLORS.text.secondary
+          ctx.font = '12px Arial'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(
+            '单独调节',
+            (startX + endX) / 2,
+            timeAxisHeight + waveformHeight * 3/4 - HANDLE_VISUAL_SIZE - 5
+          )
+        }
+        // 当没有相邻标注时，只显示手柄，不显示文字
+        else if (hasNoAdjacent) {
+          ctx.fillStyle = COLORS.region.handle.fill
+          ctx.strokeStyle = COLORS.region.handle.stroke
+          ctx.lineWidth = 1
+
+          // 保存当前绘图状态
+          ctx.save()
+          
+          // 创建裁剪区域（标注区域）
+          ctx.beginPath()
+          ctx.rect(startX, timeAxisHeight, width, waveformHeight)
+          ctx.clip()
+
+          // 绘制左侧手柄（圆形）
+          ctx.beginPath()
+          ctx.arc(startX, timeAxisHeight + waveformHeight * 3/4, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.stroke()
+
+          // 绘制右侧手柄（圆形）
+          ctx.beginPath()
+          ctx.arc(endX, timeAxisHeight + waveformHeight * 3/4, HANDLE_VISUAL_SIZE, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.stroke()
+
+          // 恢复绘图状态
+          ctx.restore()
+        }
       }
 
       // 绘制标注区域背景
@@ -442,8 +582,8 @@ export const useWaveformDrawer = () => {
       )
 
       // 绘制标注区域边框
-      ctx.strokeStyle = isEditing ? COLORS.region.border.editing : COLORS.region.border.normal
-      ctx.lineWidth = isEditing ? 2 : 1
+      ctx.strokeStyle = isEditing ? COLORS.region.border.editing : (isHovered || isAdjacent ? COLORS.region.border.hover : COLORS.region.border.normal)
+      ctx.lineWidth = isEditing || isHovered || isAdjacent ? 2 : 1
       ctx.strokeRect(
         startX,
         timeAxisHeight + waveformHeight,

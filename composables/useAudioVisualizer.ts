@@ -130,10 +130,7 @@ export function useAudioVisualizer() {
         )
         
         if (result) {
-          if (result.type === 'annotation' && result.data) {
-            // 只更新内部状态，不触发保存
-            regionManager.updateRegion(result.data)
-          } else if (result.type === 'hover') {
+          if (result.type === 'hover') {
             // 悬停状态已经在 handleMouseMove 中处理
           } else if (result.type === 'selection') {
             // 选区状态已经在 handleMouseMove 中处理
@@ -152,7 +149,16 @@ export function useAudioVisualizer() {
         )
         // 如果是标注拖动结束，触发保存
         if (result?.type === 'annotation' && result.data && onAnnotationChangeHandler) {
-          onAnnotationChangeHandler(result.data)
+          // 更新内部状态但不触发保存
+          regionManager.updateRegion(result.data.current)
+          if (result.data.adjacent) {
+            regionManager.updateRegion(result.data.adjacent)
+          }
+          // 触发保存
+          onAnnotationChangeHandler(result.data.current)
+          if (result.data.adjacent) {
+            onAnnotationChangeHandler(result.data.adjacent)
+          }
         }
         await updateDrawing()
       })
@@ -267,6 +273,7 @@ export function useAudioVisualizer() {
         pixelsPerSecond.value,
         regionManager.getAllRegions(),
         interactionHandler.hoveredRegion.value,
+        interactionHandler.adjacentRegion.value,
         selectionRange,
         editingAnnotation.value,
         buttonBounds

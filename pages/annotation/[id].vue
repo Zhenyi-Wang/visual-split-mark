@@ -440,16 +440,16 @@ onMounted(async () => {
         undefined,
         async (annotation) => {
           // 更新标注
+          const existingAnnotation = projectStore.annotations.find(a => a.id === annotation.id)
           await projectStore.updateAnnotation({
             ...annotation,
             audioFileId: currentAudioFile.value?.id || '',
-            text: annotation.text,
-            whisperText: '',
-            createdAt: new Date(),
+            text: annotation.text || '',
+            whisperText: existingAnnotation?.whisperText || '',
+            createdAt: existingAnnotation?.createdAt || new Date(),
             updatedAt: new Date()
           })
-          await saveToStorage() // 自动保存
-          message.success('时间已更新') // 添加提示消息
+          message.success('标注已更新')
         }
       )
       isInitialized.value = true
@@ -528,10 +528,6 @@ const handleConfirmDelete = async () => {
   try {
     removeRegion(annotationToDelete.value.id)
     await projectStore.deleteAnnotation(annotationToDelete.value.id)
-    await saveToStorage() // 自动保存
-    if (editingAnnotation.value?.id === annotationToDelete.value.id) {
-      clearEditingAnnotation()
-    }
     showDeleteModal.value = false
     message.success('标注已删除')
   } catch (error) {
