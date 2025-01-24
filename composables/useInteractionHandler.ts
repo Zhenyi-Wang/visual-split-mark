@@ -316,13 +316,13 @@ export function useInteractionHandler() {
     }
 
     // 检查是否悬停在标注上
-    if (!isOnButton && isInWaveformArea) {
+    if (!isOnButton) {
       let isOnHandle = false
       for (const [id, region] of regions.entries()) {
         const startX = transform.getXFromTime(region.start)
         const endX = transform.getXFromTime(region.end)
         
-        if (Math.abs(x - startX) <= HANDLE_SIZE || Math.abs(x - endX) <= HANDLE_SIZE) {
+        if (isInWaveformArea && (Math.abs(x - startX) <= HANDLE_SIZE || Math.abs(x - endX) <= HANDLE_SIZE)) {
           isOnHandle = true
           if (!hoveredRegion.value || hoveredRegion.value.id !== id) {
             hoveredRegion.value = { id, ...region }
