@@ -567,11 +567,24 @@ const handleSubmit = async () => {
 const handleTranscribe = async () => {
   if (!currentAudioFile.value || !currentProject.value?.whisperApiUrl) return
   transcribing.value = true
+  
+  // 显示进度消息
+  const loadingMessage = message.loading('正在识别文本...', {
+    duration: 0 // 持续显示，直到手动关闭
+  })
+  
   try {
     const annotations = await transcribe(currentAudioFile.value)
-    // 不需要手动更新界面，watch 会处理
+    
+    // 等待标注更新完成（下一个 tick，确保 watch 已经处理完）
+    await nextTick()
+    
+    // 关闭进度消息，显示成功消息
+    loadingMessage.destroy()
     message.success(`文本识别完成，共识别出 ${annotations.length} 个片段`)
   } catch (error) {
+    // 关闭进度消息，显示错误消息
+    loadingMessage.destroy()
     message.error('文本识别失败')
   } finally {
     transcribing.value = false
