@@ -569,11 +569,7 @@ const handleTranscribe = async () => {
   transcribing.value = true
   try {
     const annotations = await transcribe(currentAudioFile.value)
-    // 一次性添加所有区域
-    clearRegions() // 先清除现有区域
-    annotations.forEach(annotation => {
-      addRegion(annotation)
-    })
+    // 不需要手动更新界面，watch 会处理
     message.success(`文本识别完成，共识别出 ${annotations.length} 个片段`)
   } catch (error) {
     message.error('文本识别失败')
