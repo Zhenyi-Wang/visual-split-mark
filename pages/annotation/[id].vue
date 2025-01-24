@@ -300,9 +300,13 @@ const {
   onEditButtonClick,
   onDeleteButtonClick,
   updateDrawing,
-  // 添加加载状态
   loadingPhase,
-  loadingProgress
+  loadingProgress,
+  centerViewOnTime,
+  viewportStartPercent,
+  viewportEndPercent,
+  maxStartPercent,
+  minEndPercent
 } = useAudioVisualizer()
 
 const waveformRef = ref<HTMLElement | null>(null)
@@ -732,38 +736,6 @@ const showInFileManager = async (path: string) => {
     message.error('无法打开文件夹')
   }
 }
-
-// 修改渲染范围控制相关的计算属性
-const viewportStartPercent = computed({
-  get: () => Math.round((viewport.startTime / duration.value) * 100),
-  set: async (value) => {
-    viewport.setViewport(
-      (value / 100) * duration.value,
-      viewport.endTime
-    )
-    await updateDrawing()
-  }
-})
-
-const viewportEndPercent = computed({
-  get: () => Math.round((viewport.endTime / duration.value) * 100),
-  set: async (value) => {
-    viewport.setViewport(
-      viewport.startTime,
-      (value / 100) * duration.value
-    )
-    await updateDrawing()
-  }
-})
-
-// 修改范围限制
-const maxStartPercent = computed(() => {
-  return Math.min(viewportEndPercent.value - 1, 99)
-})
-
-const minEndPercent = computed(() => {
-  return Math.max(viewportStartPercent.value + 1, 1)
-})
 </script>
 
 <style scoped>

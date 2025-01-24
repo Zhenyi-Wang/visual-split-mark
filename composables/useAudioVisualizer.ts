@@ -324,6 +324,43 @@ export function useAudioVisualizer() {
     }, 16) // 等待一帧的时间
   }
 
+  // 新增：将视图居中到指定时间点的函数
+  const centerViewOnTime = async (centerTime: number, newPixelsPerSecond?: number) => {
+    if (!waveformDrawer.canvas.value) return
+    
+    // 获取正确的滚动容器
+    const container = waveformDrawer.canvas.value.parentElement?.parentElement
+    if (!container || !container.classList.contains('waveform-container')) return
+    
+    // 如果提供了新的缩放比例，更新它
+    if (newPixelsPerSecond !== undefined) {
+      pixelsPerSecond.value = newPixelsPerSecond
+      await updateDrawing()
+      await nextTick()
+    }
+    
+    // 计算波形图尺寸和目标滚动位置
+    const startTime = unref(viewport.startTime)
+    const endTime = unref(viewport.endTime)
+    const waveformWidth = (endTime - startTime) * pixelsPerSecond.value
+    const containerWidth = container.clientWidth
+    
+    // 计算目标滚动位置：将指定时间点放在容器中心
+    const centerTimePosition = (centerTime - startTime) * pixelsPerSecond.value + PADDING
+    const targetScroll = Math.max(0, 
+      Math.min(
+        waveformWidth + PADDING * 2 - containerWidth,  // 最大滚动范围
+        centerTimePosition - containerWidth / 2         // 指定位置居中
+      )
+    )
+    
+    // 设置滚动位置并确保成功
+    setScrollPosition(container, targetScroll)
+    
+    // 确保画布更新
+    await updateDrawing()
+  }
+
   return {
     // 状态
     isPlaying: computed(() => audioPlayer.isPlaying.value),
@@ -335,6 +372,61 @@ export function useAudioVisualizer() {
     playbackRate: computed(() => audioPlayer.playbackRate.value),
     loadingPhase: computed(() => audioPlayer.loadingPhase.value),
     loadingProgress: computed(() => audioPlayer.loadingProgress.value),
+    // 添加渲染范围相关的计算属性
+    viewportStartPercent: computed({
+      get: () => Math.round((viewport.startTime / audioPlayer.duration.value) * 100),
+      set: async (value) => {
+        const newStartTime = (value / 100) * audioPlayer.duration.value
+        viewport.setViewport(newStartTime, viewport.endTime)
+        await updateDrawing()
+        
+        // 检查当前播放时间是否在视口范围内
+        const currentTime = audioPlayer.currentTime.value
+        if (currentTime < newStartTime) {
+          // 如果在视口前面，调整到视口开始
+          audioPlayer.seek(newStartTime)
+          await centerViewOnTime(newStartTime)
+        } else if (currentTime > viewport.endTime) {
+          // 如果在视口后面，调整到视口结束
+          audioPlayer.seek(viewport.endTime)
+          await centerViewOnTime(viewport.endTime)
+        } else {
+          // 如果在视口内，居中到当前播放位置
+          await centerViewOnTime(currentTime)
+        }
+      }
+    }),
+    viewportEndPercent: computed({
+      get: () => Math.round((viewport.endTime / audioPlayer.duration.value) * 100),
+      set: async (value) => {
+        const newEndTime = (value / 100) * audioPlayer.duration.value
+        viewport.setViewport(viewport.startTime, newEndTime)
+        await updateDrawing()
+        
+        // 检查当前播放时间是否在视口范围内
+        const currentTime = audioPlayer.currentTime.value
+        if (currentTime < viewport.startTime) {
+          // 如果在视口前面，调整到视口开始
+          audioPlayer.seek(viewport.startTime)
+          await centerViewOnTime(viewport.startTime)
+        } else if (currentTime > newEndTime) {
+          // 如果在视口后面，调整到视口结束
+          audioPlayer.seek(newEndTime)
+          await centerViewOnTime(newEndTime)
+        } else {
+          // 如果在视口内，居中到当前播放位置
+          await centerViewOnTime(currentTime)
+        }
+      }
+    }),
+    maxStartPercent: computed(() => {
+      const endPercent = Math.round((viewport.endTime / audioPlayer.duration.value) * 100)
+      return Math.min(endPercent - 1, 99)
+    }),
+    minEndPercent: computed(() => {
+      const startPercent = Math.round((viewport.startTime / audioPlayer.duration.value) * 100)
+      return Math.max(startPercent + 1, 1)
+    }),
 
     // 方法
     initialize,
@@ -342,103 +434,16 @@ export function useAudioVisualizer() {
     playPause: audioPlayer.playPause,
     seek: audioPlayer.seek,
     zoomIn: async () => {
-      if (!waveformDrawer.canvas.value) return
-      
       const oldPixelsPerSecond = pixelsPerSecond.value
       const newPixelsPerSecond = Math.min(oldPixelsPerSecond * 1.5, 1000)
-      
-      // 获取正确的滚动容器
-      const container = waveformDrawer.canvas.value.parentElement?.parentElement
-      if (!container || !container.classList.contains('waveform-container')) return
-      
-      // 计算当前播放时间相对于渲染范围的比例
-      const startTime = unref(viewport.startTime)
-      const endTime = unref(viewport.endTime)
-      const viewCenter = audioPlayer.currentTime.value
-      
-      // 更新缩放比例
-      pixelsPerSecond.value = newPixelsPerSecond
-      
-      await updateDrawing()
-      await nextTick()
-      
-      // 计算实际的波形图宽度（不包括内边距）
-      const waveformWidth = (endTime - startTime) * newPixelsPerSecond
-      const containerWidth = container.clientWidth
-      
-      // 计算目标滚动位置：将当前播放位置放在容器中心
-      const currentTimePosition = (viewCenter - startTime) * newPixelsPerSecond + PADDING
-      const targetScroll = Math.max(0, 
-        Math.min(
-          waveformWidth + PADDING * 2 - containerWidth,  // 最大滚动范围
-          currentTimePosition - containerWidth / 2        // 当前位置居中
-        )
-      )
-      
-      // 设置滚动位置并确保成功
-      setScrollPosition(container, targetScroll)
-      
-      console.log('Zoom Debug:', {
-        viewCenter,
-        startTime,
-        endTime,
-        waveformWidth,
-        containerWidth,
-        currentTimePosition,
-        targetScroll,
-        padding: PADDING,
-        container: container.className
-      })
+      await centerViewOnTime(audioPlayer.currentTime.value, newPixelsPerSecond)
     },
     zoomOut: async () => {
-      if (!waveformDrawer.canvas.value) return
-      
       const oldPixelsPerSecond = pixelsPerSecond.value
       const newPixelsPerSecond = Math.max(oldPixelsPerSecond / 1.5, 10)
-      
-      // 获取正确的滚动容器
-      const container = waveformDrawer.canvas.value.parentElement?.parentElement
-      if (!container || !container.classList.contains('waveform-container')) return
-      
-      // 计算当前播放时间相对于渲染范围的比例
-      const startTime = unref(viewport.startTime)
-      const endTime = unref(viewport.endTime)
-      const viewCenter = audioPlayer.currentTime.value
-      
-      // 更新缩放比例
-      pixelsPerSecond.value = newPixelsPerSecond
-      
-      await updateDrawing()
-      await nextTick()
-      
-      // 计算实际的波形图宽度（不包括内边距）
-      const waveformWidth = (endTime - startTime) * newPixelsPerSecond
-      const containerWidth = container.clientWidth
-      
-      // 计算目标滚动位置：将当前播放位置放在容器中心
-      const currentTimePosition = (viewCenter - startTime) * newPixelsPerSecond + PADDING
-      const targetScroll = Math.max(0, 
-        Math.min(
-          waveformWidth + PADDING * 2 - containerWidth,  // 最大滚动范围
-          currentTimePosition - containerWidth / 2        // 当前位置居中
-        )
-      )
-      
-      // 设置滚动位置并确保成功
-      setScrollPosition(container, targetScroll)
-      
-      console.log('Zoom Debug:', {
-        viewCenter,
-        startTime,
-        endTime,
-        waveformWidth,
-        containerWidth,
-        currentTimePosition,
-        targetScroll,
-        padding: PADDING,
-        container: container.className
-      })
+      await centerViewOnTime(audioPlayer.currentTime.value, newPixelsPerSecond)
     },
+    centerViewOnTime,
     addRegion: regionManager.addRegion,
     updateRegion: regionManager.updateRegion,
     removeRegion: regionManager.removeRegion,
