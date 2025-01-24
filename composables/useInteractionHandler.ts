@@ -200,13 +200,6 @@ export function useInteractionHandler() {
       ...regionInfo.region,
       [handle]: time
     }
-    console.log('调用 onAnnotationChange:', {
-      mode: interactionMode.value,
-      handle,
-      time,
-      region: regionInfo.region,
-      updated
-    })
     if (onAnnotationChange.value) {
       onAnnotationChange.value(updated)
     }
@@ -596,17 +589,6 @@ export function useInteractionHandler() {
               updatedAdjacentRegion.start = updatedRegion.end
             }
           }
-
-          console.log('松开时 - 更新数据:', {
-            current: {
-              id: dragInfo.value.region.id,
-              ...updatedRegion
-            },
-            adjacent: updatedAdjacentRegion && dragInfo.value.adjacent ? {
-              id: dragInfo.value.adjacent.id,
-              ...updatedAdjacentRegion
-            } : undefined
-          })
 
           // 重置状态
           const result = {
