@@ -199,6 +199,32 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- 添加识别结果对话框 -->
+    <n-modal
+      v-model:show="showTranscribeResultModal"
+      preset="card"
+      title="识别结果"
+      style="width: 500px;"
+      :closable="true"
+      :mask-closable="false"
+    >
+      <n-space vertical>
+        <n-result
+          :status="transcribeResult.success ? 'success' : 'error'"
+          :title="transcribeResult.success ? '识别成功' : '识别失败'"
+          :description="transcribeResult.success ? 
+            `文本识别完成，共识别出 ${transcribeResult.count} 个片段。\n\n视图更新可能需要一些时间，如果没有看到最新结果，可以手动刷新页面。\n\n请检查识别结果，如有需要可以手动修改。` : 
+            transcribeResult.message"
+        />
+        <n-space justify="end">
+          <n-button @click="() => router.go(0)">刷新页面</n-button>
+          <n-button type="primary" @click="showTranscribeResultModal = false">
+            {{ transcribeResult.success ? '开始编辑' : '关闭' }}
+          </n-button>
+        </n-space>
+      </n-space>
+    </n-modal>
   </div>
 </template>
 
@@ -564,30 +590,36 @@ const handleSubmit = async () => {
   }
 }
 
+// 添加识别结果对话框的状态
+const showTranscribeResultModal = ref(false)
+const transcribeResult = ref<{
+  success: boolean
+  message: string
+  count?: number
+}>({
+  success: false,
+  message: ''
+})
+
+// 修改识别处理函数
 const handleTranscribe = async () => {
   if (!currentAudioFile.value || !currentProject.value?.whisperApiUrl) return
   transcribing.value = true
-  
-  // 显示进度消息
-  const loadingMessage = message.loading('正在识别文本...', {
-    duration: 0 // 持续显示，直到手动关闭
-  })
-  
   try {
     const annotations = await transcribe(currentAudioFile.value)
-    
-    // 等待标注更新完成（下一个 tick，确保 watch 已经处理完）
-    await nextTick()
-    
-    // 关闭进度消息，显示成功消息
-    loadingMessage.destroy()
-    message.success(`文本识别完成，共识别出 ${annotations.length} 个片段`)
+    transcribeResult.value = {
+      success: true,
+      message: '文本识别完成',
+      count: annotations.length
+    }
   } catch (error) {
-    // 关闭进度消息，显示错误消息
-    loadingMessage.destroy()
-    message.error('文本识别失败')
+    transcribeResult.value = {
+      success: false,
+      message: error instanceof Error ? error.message : '文本识别失败'
+    }
   } finally {
     transcribing.value = false
+    showTranscribeResultModal.value = true
   }
 }
 
