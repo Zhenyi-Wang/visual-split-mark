@@ -44,10 +44,11 @@ export const getWaveformYRange = (): [number, number] => {
 
 /**
  * 获取标注区域的Y坐标范围
+ * @param containerHeight 容器实际高度
  * @returns [startY, endY]
  */
-export const getAnnotationYRange = (): [number, number] => {
+export const getAnnotationYRange = (containerHeight: number): [number, number] => {
   const startY = TIME_AXIS_HEIGHT + WAVEFORM_HEIGHT
-  const endY = startY + ANNOTATION_HEIGHT
+  const endY = containerHeight // 使用容器实际高度作为结束位置
   return [startY, endY]
 } 

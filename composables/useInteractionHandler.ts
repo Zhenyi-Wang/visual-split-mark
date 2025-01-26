@@ -101,7 +101,7 @@ export function useInteractionHandler() {
 
     // 获取波形区域和标注区域的Y坐标范围
     const [waveformStartY, waveformEndY] = getWaveformYRange()
-    const [annotationStartY, annotationEndY] = getAnnotationYRange()
+    const [annotationStartY, annotationEndY] = getAnnotationYRange(canvas.height)
     
     // 检查是否在波形区域或标注区域内
     const isInWaveformArea = y >= waveformStartY && y <= waveformEndY
