@@ -43,3 +43,10 @@
    - 对于会进入交互式界面的命令（如 git diff, git log, less 等），应该加上 | cat
    - 这样可以避免在自动化环境中卡住
    - 例如：git diff | cat, git log | cat, less file.txt | cat
+
+8. DOM 元素查找和状态管理
+   - 使用 document.querySelector 直接查找特定类名的元素，而不是依赖 ref 的父元素关系
+   - 在 watch 函数中使用 immediate: true 确保初始化时就能触发监听
+   - 添加详细的调试日志来追踪状态更新流程
+   - 使用防抖函数来优化频繁的状态更新
+   - 确保在组件卸载时保存最终状态

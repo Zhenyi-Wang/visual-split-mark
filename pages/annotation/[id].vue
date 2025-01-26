@@ -229,6 +229,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch, computed, onMounted, onUnmounted, nextTick, unref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { format } from 'date-fns'
 import { useMessage } from 'naive-ui'
 import type { FormInst, FormRules } from 'naive-ui'
@@ -248,9 +250,11 @@ import {
 import { useViewportStore } from '~/stores/viewport'
 import type { MessageReactive } from 'naive-ui'
 import { NSpin } from 'naive-ui'
-import { unref, toRef, toRefs } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useExport } from '~/composables/useExport'
+import { useViewState } from '~/composables/useViewState'
+import { useDebounceFn } from '@vueuse/core'
+import type { AudioViewState } from '~/composables/useViewState'
 
 // 格式化音频时长（秒数）
 const formatDuration = (seconds: number) => {
@@ -440,6 +444,88 @@ const setupButtonCallbacks = () => {
   }
 }
 
+// 添加视图状态管理
+const viewState = useViewState(route.params.id as string)
+
+// 添加防抖保存
+const debouncedUpdateState = useDebounceFn((state: Partial<AudioViewState>) => {
+  if (!isInitialized.value) {
+    return
+  }
+  
+  // 确保所有必需的字段都存在
+  const fullState: AudioViewState = {
+    currentTime: state.currentTime ?? currentTime.value,
+    scrollPosition: state.scrollPosition ?? 0,
+    startTime: state.startTime ?? unref(viewport.startTime),
+    endTime: state.endTime ?? unref(viewport.endTime),
+    pixelsPerSecond: state.pixelsPerSecond ?? pixelsPerSecond.value
+  }
+  
+  viewState.updateState(fullState)
+}, 500) // 500ms 的防抖时间
+
+// 监听视口状态变化
+watch(
+  [
+    currentTime,
+    toRef(viewport, 'startTime'),
+    toRef(viewport, 'endTime'),
+    pixelsPerSecond,
+    viewportStartPercent,
+    viewportEndPercent
+  ],
+  (newValues) => {
+    const [
+      newCurrentTime,
+      newStartTime,
+      newEndTime,
+      newPixelsPerSecond,
+      newStartPercent,
+      newEndPercent
+    ] = newValues
+
+    if (!isInitialized.value || !waveformRef.value) return
+    
+    // 获取滚动容器
+    const container = document.querySelector('.waveform-container')
+    if (!container) return
+
+    // 更新视图状态
+    debouncedUpdateState({
+      currentTime: newCurrentTime,
+      scrollPosition: container.scrollLeft,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      pixelsPerSecond: newPixelsPerSecond
+    })
+  },
+  { immediate: true }
+)
+
+// 在初始化完成后恢复状态
+const restoreViewState = async () => {
+  if (!viewState.viewState.value) return
+
+  const state = viewState.viewState.value
+  
+  // 恢复视口状态
+  viewport.setViewport(state.startTime, state.endTime)
+  pixelsPerSecond.value = state.pixelsPerSecond
+  
+  await nextTick()
+  
+  // 恢复播放时间和滚动位置
+  seek(state.currentTime)
+  await centerViewOnTime(state.currentTime)
+  
+  // 恢复滚动位置
+  const container = document.querySelector('.waveform-container')
+  if (container) {
+    container.scrollLeft = state.scrollPosition
+  }
+}
+
 onMounted(async () => {
   await projectStore.initialize()
   const audioFile = projectStore.audioFiles.find(f => f.id === route.params.id)
@@ -483,12 +569,17 @@ onMounted(async () => {
         }
       )
       isInitialized.value = true
+
       // 加载已有标注
       annotations.value.forEach(annotation => {
         addRegion(annotation)
       })
+
       // 设置按钮回调
       setupButtonCallbacks()
+
+      // 恢复视图状态
+      await restoreViewState()
     } catch (error) {
       message.error('音频加载失败')
     }
@@ -510,6 +601,20 @@ onUnmounted(() => {
   destroy()
   // 移除键盘事件监听
   window.removeEventListener('keydown', handleKeydown)
+  
+  // 保存最终状态
+  if (waveformRef.value) {
+    const container = waveformRef.value.parentElement?.parentElement
+    if (container && container.classList.contains('waveform-container')) {
+      viewState.updateState({
+        currentTime: currentTime.value,
+        scrollPosition: container.scrollLeft,
+        startTime: unref(viewport.startTime),
+        endTime: unref(viewport.endTime),
+        pixelsPerSecond: pixelsPerSecond.value
+      })
+    }
+  }
 })
 
 // 添加键盘事件处理函数
