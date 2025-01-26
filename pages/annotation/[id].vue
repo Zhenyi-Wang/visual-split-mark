@@ -905,7 +905,6 @@ const showInFileManager = async (path: string) => {
 }
 
 .page-container {
-  min-height: 100vh;
   position: relative;
 }
 
