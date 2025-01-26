@@ -4,7 +4,11 @@
 
 一个专门用于制作 Whisper 模型微调数据集的音频标注工具。通过直观的可视化界面，帮助用户快速准确地创建高质量的语音识别训练数据。
 
+> **注意**: 这是一个个人项目，功能和稳定性可能有限。如果您没有处理长音频（1小时以上）的特殊需求，建议使用更成熟的开源方案 [Label Studio](https://github.com/HumanSignal/label-studio)。本项目的主要特点是支持在很长的原始音频上直接进行标注和动态分割，避免了预先分割音频的繁琐工作。而 Label Studio 更适合对已分割好的短音频进行标注。
+
 ## 项目说明
+
+![界面预览](docs/assets/image.png)
 
 本项目主要用于生成 [Whisper-Finetune](https://github.com/yeyupiaoling/Whisper-Finetune) 项目所需的微调数据集。为了提高标注效率，项目集成了 Whisper 转录功能，可以先通过 Whisper 进行初步转录，再进行人工校正。如果你需要一个简单的 Whisper API 服务，可以参考 [whisper-api](https://github.com/Zhenyi-Wang/whisper-api) 项目。
 
