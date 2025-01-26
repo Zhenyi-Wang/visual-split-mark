@@ -884,7 +884,8 @@ const showInFileManager = async (path: string) => {
   background-color: #fff;
   border-radius: 4px;
   position: relative;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   height: 100%;
 }
 
