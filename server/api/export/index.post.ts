@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { format } from 'date-fns'
 import { audioProcessor } from '~/utils/audio'
 import type { AudioFile, Annotation } from '~/types/project'
 import type { ExportResponse } from '~/types/export'
@@ -8,10 +9,18 @@ import { progressEmitter } from '../../utils/progress'
 import { loadFile } from '../../utils/file'
 
 export default defineEventHandler(async (event): Promise<ExportResponse> => {
-  const { exportId, projectName, audioFile, annotations } = await readBody(event)
-  
-  // 使用传入的 exportId 作为目录名
-  const dirname = exportId
+  const { exportId, projectName, audioFile, annotations } = await readBody(
+    event
+  )
+
+  // 使用时间戳_项目名_音频文件名作为目录名
+  const timestamp = format(new Date(), 'yyyyMMdd_HHmmss')
+  // 只过滤文件系统禁止的字符: \ / : * ? " < > |
+  const sanitizedProjectName = projectName.replace(/[\\/:*?"<>|]/g, '_')
+  const sanitizedAudioName = audioFile.originalName
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\.[^/.]+$/, '')
+  const dirname = `${timestamp}_${sanitizedProjectName}_${sanitizedAudioName}`
   const exportPath = resolve(process.cwd(), 'storage/exports', dirname)
   const datasetPath = resolve(exportPath, 'dataset')
 
@@ -27,48 +36,55 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
     for (let i = 0; i < annotations.length; i++) {
       const annotation = annotations[i]
       const uuid = crypto.randomUUID()
-      
+
       console.log(`处理第 ${i + 1}/${total} 个标注:`, {
         start: annotation.start,
         end: annotation.end,
-        text: annotation.text
+        text: annotation.text,
       })
-      
+
       // 提取音频片段
-      const response = await $fetch<{ success: boolean, data: { path: string } }>('/api/audio/extract', {
+      const response = await $fetch<{
+        success: boolean
+        data: { path: string }
+      }>('/api/audio/extract', {
         method: 'POST',
         body: {
           audioPath: audioFile.wavPath,
           start: annotation.start,
-          end: annotation.end
-        }
+          end: annotation.end,
+        },
       })
-      
+
       if (!response?.success || !response?.data?.path) {
         throw new Error('音频提取失败：未获取到输出文件路径')
       }
-      
+
       console.log('音频片段已提取:', response.data.path)
-      
+
       // 复制音频文件到目标目录
       const wavPath = resolve(datasetPath, `${uuid}.wav`)
       const wavBuffer = await loadFile(response.data.path)
       await writeFile(wavPath, wavBuffer)
-      
+
       console.log('音频片段已保存:', wavPath)
 
       // 添加数据集条目
       dataset.push({
         audio: {
-          path: `dataset/${uuid}.wav`
+          path: `dataset/${uuid}.wav`,
         },
         sentence: annotation.text,
-        language: "Chinese",
-        duration: Number((annotation.end - annotation.start).toFixed(2))
+        language: 'Chinese',
+        duration: Number((annotation.end - annotation.start).toFixed(2)),
       })
 
       // 发送进度通知
-      progressEmitter.emit('progress', dirname, Math.round((i + 1) / total * 100))
+      progressEmitter.emit(
+        'progress',
+        dirname,
+        Math.round(((i + 1) / total) * 100)
+      )
     }
 
     // 保存数据集 JSON 文件
@@ -81,11 +97,10 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
     const response: ExportResponse = {
       dirname,
       path: exportPath,
-      count: annotations.length
+      count: annotations.length,
     }
 
     return response
-
   } catch (error) {
     console.error('导出失败:', error)
     // 如果出错，尝试清理已创建的目录
@@ -97,7 +112,7 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
     }
     throw createError({
       statusCode: 500,
-      message: error instanceof Error ? error.message : '导出失败'
+      message: error instanceof Error ? error.message : '导出失败',
     })
   }
-}) 
+})
