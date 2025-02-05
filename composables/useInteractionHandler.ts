@@ -3,6 +3,7 @@ import type {
   RegionInfo,
   Region,
   ButtonBounds,
+  ButtonBoundsSet,
   RegionClickHandler,
   AnnotationChangeHandler,
   ButtonClickHandler
@@ -70,9 +71,11 @@ export function useInteractionHandler() {
   // 回调函数
   const onRegionClick = ref<RegionClickHandler | null>(null)
   const onAnnotationChange = ref<AnnotationChangeHandler | null>(null)
-  const onAddButtonClick = ref<ButtonClickHandler | null>(null)
-  const onEditButtonClick = ref<ButtonClickHandler | null>(null)
-  const onDeleteButtonClick = ref<ButtonClickHandler | null>(null)
+  const onAddButtonClick = ref<ButtonClickHandler>(() => {})
+  const onEditButtonClick = ref<ButtonClickHandler>(() => {})
+  const onDeleteButtonClick = ref<ButtonClickHandler>(() => {})
+  const onMergeLeftButtonClick = ref<ButtonClickHandler>(() => {})
+  const onMergeRightButtonClick = ref<ButtonClickHandler>(() => {})
 
   // 获取 viewport store
   const viewport = useViewportStore()
@@ -315,56 +318,58 @@ export function useInteractionHandler() {
     return true
   }
 
+  // 辅助函数：检查点是否在按钮边界内
+  const isOnButtonBounds = (x: number, y: number, bounds: ButtonBounds): boolean => {
+    const { x: bx, y: by, width: bw, height: bh } = bounds
+    return x >= bx && x <= bx + bw && y >= by && y <= by + bh
+  }
+
   // 辅助函数：检查是否在按钮上
   const isOnButton = (
     x: number,
     y: number,
-    buttonBounds: ButtonBounds | null
+    buttonBounds: ButtonBoundsSet
   ) => {
-    if (!buttonBounds) return false
-    const { x: bx, y: by, width: bw, height: bh } = buttonBounds
-    return x >= bx && x <= bx + bw && y >= by && y <= by + bh
+    if (buttonBounds.add && isOnButtonBounds(x, y, buttonBounds.add)) {
+      return 'add'
+    }
+    if (buttonBounds.edit && isOnButtonBounds(x, y, buttonBounds.edit)) {
+      return 'edit'
+    }
+    if (buttonBounds.delete && isOnButtonBounds(x, y, buttonBounds.delete)) {
+      return 'delete'
+    }
+    if (buttonBounds.mergeLeft && isOnButtonBounds(x, y, buttonBounds.mergeLeft)) {
+      return 'mergeLeft'
+    }
+    if (buttonBounds.mergeRight && isOnButtonBounds(x, y, buttonBounds.mergeRight)) {
+      return 'mergeRight'
+    }
+    return null
   }
 
   // 辅助函数：处理按钮点击
-  const handleButtonClick = (
-    x: number,
-    y: number,
-    addButtonBounds: ButtonBounds | null,
-    editButtonBounds: ButtonBounds | null,
-    deleteButtonBounds: ButtonBounds | null
-  ) => {
-    // 检查添加按钮
-    if (isOnButton(x, y, addButtonBounds)) {
-      if (onAddButtonClick.value) {
+  const handleButtonClick = (buttonType: string | null, region: Region & { id: string }) => {
+    if (!buttonType) return false
+
+    switch (buttonType) {
+      case 'add':
         onAddButtonClick.value()
-        setTimeout(clearSelection, 0)
-      }
-      return true
+        break
+      case 'edit':
+        onEditButtonClick.value(region.id)
+        break
+      case 'delete':
+        onDeleteButtonClick.value(region.id)
+        break
+      case 'mergeLeft':
+        onMergeLeftButtonClick.value(region.id)
+        break
+      case 'mergeRight':
+        onMergeRightButtonClick.value(region.id)
+        break
     }
-
-    // 检查编辑和删除按钮
-    if (hoveredRegion.value) {
-      if (isOnButton(x, y, editButtonBounds)) {
-        if (onEditButtonClick.value) {
-          onEditButtonClick.value(hoveredRegion.value.id)
-          clearSelection()
-          hoveredRegion.value = null
-        }
-        return true
-      }
-
-      if (isOnButton(x, y, deleteButtonBounds)) {
-        if (onDeleteButtonClick.value) {
-          onDeleteButtonClick.value(hoveredRegion.value.id)
-          clearSelection()
-          hoveredRegion.value = null
-        }
-        return true
-      }
-    }
-
-    return false
+    return true
   }
 
   // 辅助函数：更新悬停状态
@@ -373,16 +378,12 @@ export function useInteractionHandler() {
     y: number,
     canvas: HTMLCanvasElement,
     regions: Map<string, Region>,
-    addButtonBounds: ButtonBounds | null,
-    editButtonBounds: ButtonBounds | null,
-    deleteButtonBounds: ButtonBounds | null,
+    buttonBounds: ButtonBoundsSet,
     duration: number
   ) => {
     // 检查是否在按钮上
-    const isOnAnyButton = 
-      isOnButton(x, y, addButtonBounds) ||
-      isOnButton(x, y, editButtonBounds) ||
-      isOnButton(x, y, deleteButtonBounds)
+    const buttonType = isOnButton(x, y, buttonBounds)
+    const isOnAnyButton = buttonType !== null
 
     if (!isOnAnyButton) {
       // 检查是否在标注区域
@@ -426,9 +427,7 @@ export function useInteractionHandler() {
     container: HTMLElement,
     duration: number,
     regions: Map<string, Region>,
-    addButtonBounds: ButtonBounds | null,
-    editButtonBounds: ButtonBounds | null,
-    deleteButtonBounds: ButtonBounds | null,
+    buttonBounds: ButtonBoundsSet,
     seek: (time: number) => void
   ) => {
     const transform = createTransform(canvas)
@@ -438,7 +437,10 @@ export function useInteractionHandler() {
     const clickStartTime = Date.now()
 
     // 检查按钮点击
-    if (handleButtonClick(x, y, addButtonBounds, editButtonBounds, deleteButtonBounds)) {
+    const buttonType = isOnButton(x, y, buttonBounds)
+    if (buttonType && hoveredRegion.value) {
+      const { id, ...region } = hoveredRegion.value
+      handleButtonClick(buttonType, { id, ...region })
       return clickStartTime
     }
 
@@ -524,9 +526,7 @@ export function useInteractionHandler() {
     container: HTMLElement,
     duration: number,
     regions: Map<string, Region>,
-    addButtonBounds: ButtonBounds | null,
-    editButtonBounds: ButtonBounds | null,
-    deleteButtonBounds: ButtonBounds | null
+    buttonBounds: ButtonBoundsSet
   ) => {
     const transform = createTransform(canvas)
     const rect = canvas.getBoundingClientRect()
@@ -556,7 +556,7 @@ export function useInteractionHandler() {
 
       case 'idle':
         // 更新悬停状态
-        return updateHoverState(x, y, canvas, regions, addButtonBounds, editButtonBounds, deleteButtonBounds, duration)
+        return updateHoverState(x, y, canvas, regions, buttonBounds, duration)
     }
   }
 
@@ -681,6 +681,8 @@ export function useInteractionHandler() {
     onAddButtonClick,
     onEditButtonClick,
     onDeleteButtonClick,
+    onMergeLeftButtonClick,
+    onMergeRightButtonClick,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,

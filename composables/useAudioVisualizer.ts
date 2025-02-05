@@ -1,11 +1,14 @@
 import { ref, computed, nextTick, readonly, unref } from 'vue'
+import { useMessage } from 'naive-ui'
 import type { AudioFile } from '~/types/project'
 import type {
   Region,
   ButtonBounds,
   RegionClickHandler,
   AnnotationChangeHandler,
-  ButtonClickHandler
+  ButtonClickHandler,
+  MergeDirection,
+  MergeAnnotationResponse
 } from '~/types/audio'
 import {
   PADDING,
@@ -26,6 +29,7 @@ export function useAudioVisualizer() {
   const interactionHandler = useInteractionHandler()
   const regionManager = useRegionManager()
   const viewport = useViewportStore()
+  const message = useMessage()
   const editingAnnotation = ref<{ id: string; start: number; end: number; text?: string } | null>(null)
   const selectedRegion = ref<{ start: number; end: number } | null>(null)
   const pixelsPerSecond = ref(50)
@@ -37,6 +41,8 @@ export function useAudioVisualizer() {
   const addButtonBounds = ref<ButtonBounds | null>(null)
   const editButtonBounds = ref<ButtonBounds | null>(null)
   const deleteButtonBounds = ref<ButtonBounds | null>(null)
+  const mergeLeftButtonBounds = ref<ButtonBounds | null>(null)
+  const mergeRightButtonBounds = ref<ButtonBounds | null>(null)
 
   const initialize = async (
     container: HTMLElement, 
@@ -108,9 +114,13 @@ export function useAudioVisualizer() {
           container,
           audioPlayer.duration.value,
           regionManager.getAllRegions(),
-          addButtonBounds.value,
-          editButtonBounds.value,
-          deleteButtonBounds.value,
+          {
+            add: addButtonBounds.value,
+            edit: editButtonBounds.value,
+            delete: deleteButtonBounds.value,
+            mergeLeft: mergeLeftButtonBounds.value,
+            mergeRight: mergeRightButtonBounds.value
+          },
           audioPlayer.seek
         )
         await updateDrawing()
@@ -124,9 +134,13 @@ export function useAudioVisualizer() {
           container,
           audioPlayer.duration.value,
           regionManager.getAllRegions(),
-          addButtonBounds.value,
-          editButtonBounds.value,
-          deleteButtonBounds.value
+          {
+            add: addButtonBounds.value,
+            edit: editButtonBounds.value,
+            delete: deleteButtonBounds.value,
+            mergeLeft: mergeLeftButtonBounds.value,
+            mergeRight: mergeRightButtonBounds.value
+          }
         )
         
         if (result) {
@@ -227,6 +241,72 @@ export function useAudioVisualizer() {
       updateDrawing()
     }
 
+    // 辅助函数：处理标注合并
+    const handleMerge = async (id: string, direction: MergeDirection) => {
+      if (!id) return
+      const region = regionManager.getRegion(id)
+      if (!region) return
+
+      // 查找相邻标注
+      let adjacentId: string | null = null
+      for (const [otherId, otherRegion] of regionManager.getAllRegions()) {
+        if (otherId === id) continue
+        if (direction === 'left' && Math.abs(otherRegion.end - region.start) < 0.01) {
+          adjacentId = otherId
+          break
+        }
+        if (direction === 'right' && Math.abs(otherRegion.start - region.end) < 0.01) {
+          adjacentId = otherId
+          break
+        }
+      }
+
+      if (adjacentId) {
+        try {
+          // 调用合并 API
+          const response = await $fetch<MergeAnnotationResponse>('/api/annotations/merge', {
+            method: 'POST',
+            body: {
+              targetId: adjacentId,  // 相邻标注作为目标
+              sourceId: id,          // 当前标注作为源
+              direction
+            }
+          })
+
+          // 更新本地状态
+          if (response.success) {
+            // 先添加合并后的标注
+            regionManager.updateRegion(response.annotation)
+            // 再删除源标注（当前标注）
+            regionManager.removeRegion(id)
+            
+            // 如果有回调，通知外部
+            if (onAnnotationChangeHandler) {
+              // 通知合并后的标注更新
+              onAnnotationChangeHandler(response.annotation)
+              // 通知源标注删除
+              onAnnotationChangeHandler({ id, deleted: true } as any)
+            }
+          }
+        } catch (error) {
+          console.error('合并标注失败:', error)
+          // 显示错误提示
+          message.error('合并标注失败，请重试')
+        }
+      }
+
+      // 清理状态
+      interactionHandler.clearAll()
+      updateDrawing()
+    }
+
+    interactionHandler.onMergeLeftButtonClick.value = (id) => {
+      if (id) handleMerge(id, 'left')
+    }
+    interactionHandler.onMergeRightButtonClick.value = (id) => {
+      if (id) handleMerge(id, 'right')
+    }
+
     // 初始绘制
     updateDrawing()
   }
@@ -255,15 +335,13 @@ export function useAudioVisualizer() {
       // 同步更新 selectedRegion
       selectedRegion.value = selectionRange
 
-      // 准备按钮边界信息
+      // 准备按钮边界对象
       const buttonBounds = {
-        add: null,
-        edit: null,
-        delete: null
-      } as {
-        add: { x: number; y: number; width: number; height: number } | null;
-        edit: { x: number; y: number; width: number; height: number } | null;
-        delete: { x: number; y: number; width: number; height: number } | null;
+        add: addButtonBounds.value,
+        edit: editButtonBounds.value,
+        delete: deleteButtonBounds.value,
+        mergeLeft: mergeLeftButtonBounds.value,
+        mergeRight: mergeRightButtonBounds.value
       }
 
       // 绘制波形
@@ -283,6 +361,8 @@ export function useAudioVisualizer() {
       addButtonBounds.value = buttonBounds.add ? { ...buttonBounds.add } : null
       editButtonBounds.value = buttonBounds.edit ? { ...buttonBounds.edit } : null
       deleteButtonBounds.value = buttonBounds.delete ? { ...buttonBounds.delete } : null
+      mergeLeftButtonBounds.value = buttonBounds.mergeLeft ? { ...buttonBounds.mergeLeft } : null
+      mergeRightButtonBounds.value = buttonBounds.mergeRight ? { ...buttonBounds.mergeRight } : null
     })
   }
 
@@ -457,6 +537,8 @@ export function useAudioVisualizer() {
     onAddButtonClick: interactionHandler.onAddButtonClick,
     onEditButtonClick: interactionHandler.onEditButtonClick,
     onDeleteButtonClick: interactionHandler.onDeleteButtonClick,
+    onMergeLeftButtonClick: interactionHandler.onMergeLeftButtonClick,
+    onMergeRightButtonClick: interactionHandler.onMergeRightButtonClick,
     updateDrawing
   }
 } 

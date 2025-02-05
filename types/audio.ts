@@ -26,6 +26,15 @@ export interface ButtonBounds {
   height: number
 }
 
+// 按钮边界集合接口
+export interface ButtonBoundsSet {
+  add: ButtonBounds | null
+  edit: ButtonBounds | null
+  delete: ButtonBounds | null
+  mergeLeft: ButtonBounds | null
+  mergeRight: ButtonBounds | null
+}
+
 // 音频可视化状态接口
 export interface AudioVisualizerState {
   isPlaying: boolean
@@ -76,4 +85,20 @@ export type ButtonClickHandler = (id?: string) => void
 export interface AudioLoadProgress {
   phase: 'idle' | 'downloading' | 'decoding' | 'ready'
   progress: number
+}
+
+// 合并方向类型
+export type MergeDirection = 'left' | 'right'
+
+// 合并请求接口
+export interface MergeAnnotationPayload {
+  targetId: string      // 目标标注ID（被合并到的ID，即相邻标注的ID）
+  sourceId: string      // 源标注ID（当前点击的标注ID）
+  direction: MergeDirection  // 合并方向
+}
+
+// 合并响应接口
+export interface MergeAnnotationResponse {
+  success: boolean
+  annotation: Region & { id: string }
 } 

@@ -1,5 +1,5 @@
 import { ref, readonly, computed } from 'vue'
-import type { WaveformDrawer, Region } from '~/types/audio'
+import type { WaveformDrawer, Region, ButtonBoundsSet } from '~/types/audio'
 import { useViewportStore } from '~/stores/viewport'
 import {
   PADDING,
@@ -95,19 +95,64 @@ export const useWaveformDrawer = () => {
   const drawAddIcon = (x: number, y: number, size: number) => {
     if (!canvasCtx.value) return
 
-    const iconSize = size * 0.5
-    const startX = x + (size - iconSize) / 2
-    const startY = y + (size - iconSize) / 2
-    const centerX = startX + iconSize / 2
-    const centerY = startY + iconSize / 2
+    const padding = size * 0.3
+    const lineWidth = size * 0.1
 
     canvasCtx.value.strokeStyle = '#fff'
-    canvasCtx.value.lineWidth = 2
+    canvasCtx.value.lineWidth = lineWidth
+
+    // 绘制加号
     canvasCtx.value.beginPath()
-    canvasCtx.value.moveTo(startX, centerY)
-    canvasCtx.value.lineTo(startX + iconSize, centerY)
-    canvasCtx.value.moveTo(centerX, startY)
-    canvasCtx.value.lineTo(centerX, startY + iconSize)
+    // 横线
+    canvasCtx.value.moveTo(x + padding, y + size / 2)
+    canvasCtx.value.lineTo(x + size - padding, y + size / 2)
+    // 竖线
+    canvasCtx.value.moveTo(x + size / 2, y + padding)
+    canvasCtx.value.lineTo(x + size / 2, y + size - padding)
+    canvasCtx.value.stroke()
+  }
+
+  // 绘制向左合并图标
+  const drawMergeLeftIcon = (x: number, y: number, size: number) => {
+    if (!canvasCtx.value) return
+
+    const padding = size * 0.3
+    const lineWidth = size * 0.1
+
+    canvasCtx.value.strokeStyle = '#fff'
+    canvasCtx.value.lineWidth = lineWidth
+
+    // 绘制左箭头
+    canvasCtx.value.beginPath()
+    // 箭头主体
+    canvasCtx.value.moveTo(x + size - padding, y + size / 2)
+    canvasCtx.value.lineTo(x + padding, y + size / 2)
+    // 箭头头部
+    canvasCtx.value.moveTo(x + padding * 2, y + padding)
+    canvasCtx.value.lineTo(x + padding, y + size / 2)
+    canvasCtx.value.lineTo(x + padding * 2, y + size - padding)
+    canvasCtx.value.stroke()
+  }
+
+  // 绘制向右合并图标
+  const drawMergeRightIcon = (x: number, y: number, size: number) => {
+    if (!canvasCtx.value) return
+
+    const padding = size * 0.3
+    const lineWidth = size * 0.1
+
+    canvasCtx.value.strokeStyle = '#fff'
+    canvasCtx.value.lineWidth = lineWidth
+
+    // 绘制右箭头
+    canvasCtx.value.beginPath()
+    // 箭头主体
+    canvasCtx.value.moveTo(x + padding, y + size / 2)
+    canvasCtx.value.lineTo(x + size - padding, y + size / 2)
+    // 箭头头部
+    canvasCtx.value.moveTo(x + size - padding * 2, y + padding)
+    canvasCtx.value.lineTo(x + size - padding, y + size / 2)
+    canvasCtx.value.lineTo(x + size - padding * 2, y + size - padding)
     canvasCtx.value.stroke()
   }
 
@@ -121,11 +166,7 @@ export const useWaveformDrawer = () => {
     adjacentRegion: { id: string; region: Region } | null,
     selectionRange: { start: number; end: number } | null,
     editingAnnotation: { id: string } | null,
-    buttonBounds: {
-      add: { x: number; y: number; width: number; height: number } | null
-      edit: { x: number; y: number; width: number; height: number } | null
-      delete: { x: number; y: number; width: number; height: number } | null
-    }
+    buttonBounds: ButtonBoundsSet
   ) => {
     if (
       !canvasCtx.value ||
@@ -396,11 +437,7 @@ export const useWaveformDrawer = () => {
     editingAnnotation: { id: string } | null,
     duration: number,
     pixelsPerSecond: number,
-    buttonBounds: {
-      add: { x: number; y: number; width: number; height: number } | null
-      edit: { x: number; y: number; width: number; height: number } | null
-      delete: { x: number; y: number; width: number; height: number } | null
-    }
+    buttonBounds: ButtonBoundsSet
   ) => {
     if (!canvasCtx.value || !canvas.value) return
 
@@ -741,6 +778,37 @@ export const useWaveformDrawer = () => {
           drawButton(deleteX, buttonY, BUTTON_SIZE, COLORS.button.delete)
           drawDeleteIcon(deleteX, buttonY, BUTTON_SIZE)
 
+          // 计算合并按钮的位置
+          const mergeButtonY = buttonY + BUTTON_SIZE + BUTTON_GAP
+          const mergeLeftX = editX
+          const mergeRightX = deleteX
+
+          // 检查是否有相邻标注
+          let hasLeftAdjacent = false
+          let hasRightAdjacent = false
+          for (const [otherId, otherRegion] of regions.entries()) {
+            if (otherId === id) continue
+            if (Math.abs(otherRegion.end - region.start) < 0.01) {
+              hasLeftAdjacent = true
+            }
+            if (Math.abs(otherRegion.start - region.end) < 0.01) {
+              hasRightAdjacent = true
+            }
+          }
+
+          // 根据相邻标注情况绘制合并按钮
+          if (hasLeftAdjacent) {
+            // 绘制合并左按钮
+            drawButton(mergeLeftX, mergeButtonY, BUTTON_SIZE, COLORS.button.edit)
+            drawMergeLeftIcon(mergeLeftX, mergeButtonY, BUTTON_SIZE)
+          }
+
+          if (hasRightAdjacent) {
+            // 绘制合并右按钮
+            drawButton(mergeRightX, mergeButtonY, BUTTON_SIZE, COLORS.button.edit)
+            drawMergeRightIcon(mergeRightX, mergeButtonY, BUTTON_SIZE)
+          }
+
           // 更新按钮边界
           buttonBounds.edit = {
             x: editX,
@@ -755,6 +823,21 @@ export const useWaveformDrawer = () => {
             width: BUTTON_SIZE,
             height: BUTTON_SIZE,
           }
+
+          // 只有在有相邻标注时才更新合并按钮的边界
+          buttonBounds.mergeLeft = hasLeftAdjacent ? {
+            x: mergeLeftX,
+            y: mergeButtonY,
+            width: BUTTON_SIZE,
+            height: BUTTON_SIZE,
+          } : null
+
+          buttonBounds.mergeRight = hasRightAdjacent ? {
+            x: mergeRightX,
+            y: mergeButtonY,
+            width: BUTTON_SIZE,
+            height: BUTTON_SIZE,
+          } : null
         }
       }
     })
@@ -764,11 +847,7 @@ export const useWaveformDrawer = () => {
   const drawSelection = (
     selectionRange: { start: number; end: number },
     duration: number,
-    buttonBounds: {
-      add: { x: number; y: number; width: number; height: number } | null
-      edit: { x: number; y: number; width: number; height: number } | null
-      delete: { x: number; y: number; width: number; height: number } | null
-    }
+    buttonBounds: ButtonBoundsSet
   ) => {
     if (!canvasCtx.value || !canvas.value) return
 
