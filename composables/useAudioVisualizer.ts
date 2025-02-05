@@ -201,45 +201,57 @@ export function useAudioVisualizer() {
     }
 
     // 设置按钮回调
-    interactionHandler.onAddButtonClick.value = async () => {
-      if (interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null) {
-        // 设置选区
-        selectedRegion.value = {
-          start: interactionHandler.selectionStart.value,
-          end: interactionHandler.selectionEnd.value
+    const originalOnAddButtonClick = interactionHandler.onAddButtonClick.value
+    const originalOnEditButtonClick = interactionHandler.onEditButtonClick.value
+    const originalOnDeleteButtonClick = interactionHandler.onDeleteButtonClick.value
+    
+    
+    // 只有在没有设置回调的情况下才设置默认回调
+    if (!originalOnAddButtonClick) {
+      interactionHandler.onAddButtonClick.value = async () => {
+        if (interactionHandler.selectionStart.value !== null && interactionHandler.selectionEnd.value !== null) {
+          // 设置选区
+          selectedRegion.value = {
+            start: interactionHandler.selectionStart.value,
+            end: interactionHandler.selectionEnd.value
+          }
+          // 更新绘制，确保选区被更新
+          await updateDrawing()
         }
-        // 更新绘制，确保选区被更新
-        await updateDrawing()
       }
     }
 
-    interactionHandler.onEditButtonClick.value = async (id) => {
-      if (!id) return
-      const region = regionManager.getRegion(id)
-      if (region) {
+    if (!originalOnEditButtonClick) {
+      interactionHandler.onEditButtonClick.value = async (id) => {
+        if (!id) return
+        const region = regionManager.getRegion(id)
+        if (region) {
+          // 清理所有状态
+          interactionHandler.clearAll()
+          // 设置为编辑状态
+          editingAnnotation.value = { id, ...region }
+          // 触发标注变更回调
+          if (onAnnotationChangeHandler) {
+            onAnnotationChangeHandler({ id, ...region })
+          }
+          await updateDrawing()
+        }
+      }
+    } 
+
+    if (!originalOnDeleteButtonClick) {
+      interactionHandler.onDeleteButtonClick.value = (id) => {
+        if (!id) return
+        regionManager.removeRegion(id)
         // 清理所有状态
         interactionHandler.clearAll()
-        // 设置为编辑状态
-        editingAnnotation.value = { id, ...region }
-        // 触发标注变更回调
-        if (onAnnotationChangeHandler) {
-          onAnnotationChangeHandler({ id, ...region })
+        // 清除编辑状态
+        if (editingAnnotation.value?.id === id) {
+          editingAnnotation.value = null
         }
-        await updateDrawing()
+        updateDrawing()
       }
-    }
-
-    interactionHandler.onDeleteButtonClick.value = (id) => {
-      if (!id) return
-      regionManager.removeRegion(id)
-      // 清理所有状态
-      interactionHandler.clearAll()
-      // 清除编辑状态
-      if (editingAnnotation.value?.id === id) {
-        editingAnnotation.value = null
-      }
-      updateDrawing()
-    }
+    } 
 
     // 辅助函数：处理标注合并
     const handleMerge = async (id: string, direction: MergeDirection) => {

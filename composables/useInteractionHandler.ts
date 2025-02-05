@@ -350,10 +350,14 @@ export function useInteractionHandler() {
 
   // 辅助函数：处理按钮点击
   const handleButtonClick = (buttonType: string | null, region: Region & { id: string }) => {
+    
     if (!buttonType) return false
 
     switch (buttonType) {
       case 'add':
+        if (typeof onAddButtonClick.value !== 'function') {
+          return false
+        }
         onAddButtonClick.value()
         break
       case 'edit':
@@ -438,6 +442,14 @@ export function useInteractionHandler() {
 
     // 检查按钮点击
     const buttonType = isOnButton(x, y, buttonBounds)
+    
+    // 特殊处理 Add 按钮
+    if (buttonType === 'add') {
+      handleButtonClick(buttonType, { id: '', start: 0, end: 0, text: '' })
+      return clickStartTime
+    }
+    
+    // 处理其他需要 hoveredRegion 的按钮
     if (buttonType && hoveredRegion.value) {
       const { id, ...region } = hoveredRegion.value
       handleButtonClick(buttonType, { id, ...region })

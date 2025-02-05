@@ -393,6 +393,25 @@ const handleDecreaseRate = () => {
   setPlaybackRate(newRate)
 }
 
+// 设置按钮回调函数
+const setupButtonCallbacks = () => {
+  // 设置按钮点击回调
+  onAddButtonClick.value = handleAddAnnotation
+  onEditButtonClick.value = (id) => {
+    const annotation = annotations.value.find(a => a.id === id)
+    if (annotation) {
+      handleEditAnnotation(annotation)
+    }
+  }
+  onDeleteButtonClick.value = (id) => {
+    const annotation = annotations.value.find(a => a.id === id)
+    if (annotation) {
+      annotationToDelete.value = annotation
+      showDeleteModal.value = true
+    }
+  }
+}
+
 // 添加标注处理函数
 const handleAddAnnotation = () => {
   if (selectedRegion.value) {
@@ -424,25 +443,6 @@ watch(showTextInputModal, (newValue) => {
     annotationText.value = ''
   }
 })
-
-// 设置按钮回调函数
-const setupButtonCallbacks = () => {
-  // 设置按钮点击回调
-  onAddButtonClick.value = handleAddAnnotation
-  onEditButtonClick.value = (id) => {
-    const annotation = annotations.value.find(a => a.id === id)
-    if (annotation) {
-      handleEditAnnotation(annotation)
-    }
-  }
-  onDeleteButtonClick.value = (id) => {
-    const annotation = annotations.value.find(a => a.id === id)
-    if (annotation) {
-      annotationToDelete.value = annotation
-      showDeleteModal.value = true
-    }
-  }
-}
 
 // 添加视图状态管理
 const viewState = useViewState(route.params.id as string)
@@ -550,6 +550,10 @@ onMounted(async () => {
   // 初始化波形图
   if (!isInitialized.value && waveformRef.value) {
     try {
+      
+      // 先设置按钮回调
+      setupButtonCallbacks()
+      
       await initialize(
         waveformRef.value, 
         audioFile,
@@ -575,11 +579,6 @@ onMounted(async () => {
         addRegion(annotation)
       })
 
-      // 设置按钮回调
-      setupButtonCallbacks()
-
-      // 恢复视图状态
-      await restoreViewState()
     } catch (error) {
       message.error('音频加载失败')
     }
