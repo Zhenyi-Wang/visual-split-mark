@@ -27,7 +27,7 @@ export interface ExportRequest {
 export const EXPORT_CONSTANTS = {
   DEFAULT_CONFIG: {
     mergeSentences: false,
-    includeTimestamps: true,     // 默认开启时间戳模式
+    includeTimestamps: false,     // 默认关闭时间戳模式
     mergeOnlyConsecutive: true,  // 默认只合并连续标注
     maxDuration: 25,             // 默认最大时长 25 秒
     maxGap: 0.1,                // 默认最大间隔 0.1 秒

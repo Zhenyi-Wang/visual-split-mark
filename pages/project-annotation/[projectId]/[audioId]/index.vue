@@ -234,17 +234,19 @@
                   </div>
                 </n-space>
               </n-form-item>
-
-              <n-switch 
-                v-model:value="exportConfig.includeTimestamps"
-              >
-                <template #checked>时间戳模式：开启</template>
-                <template #unchecked>时间戳模式：关闭</template>
-              </n-switch>
-              <n-text depth="3" style="margin-left: 24px">
-                记录原始标注的时间戳
-              </n-text>
             </template>
+
+            <n-divider />
+
+            <n-switch 
+              v-model:value="exportConfig.includeTimestamps"
+            >
+              <template #checked>时间戳训练：开启</template>
+              <template #unchecked>时间戳训练：关闭</template>
+            </n-switch>
+            <n-text depth="3" style="margin-left: 24px">
+              仅在需要训练模型输出时间戳时开启。开启后导出的 JSON 中会添加 sentences 字段，用于训练模型预测每句话的起止时间。
+            </n-text>
           </n-space>
         </n-card>
 
@@ -271,6 +273,9 @@
             <n-descriptions-item label="合并模式">
               {{ exportConfig.mergeSentences ? '开启' : '关闭' }}
             </n-descriptions-item>
+            <n-descriptions-item label="时间戳训练">
+              {{ exportConfig.includeTimestamps ? '开启' : '关闭' }}
+            </n-descriptions-item>
             <template v-if="exportConfig.mergeSentences">
               <n-descriptions-item label="时长限制">
                 {{ exportConfig.maxDuration }} 秒
@@ -279,9 +284,6 @@
                 {{ exportConfig.mergeOnlyConsecutive ? 
                   `严格（间隔 < ${exportConfig.maxGap}秒）` : 
                   exportConfig.keepGaps ? '宽松（保留间隔）' : '宽松（移除间隔）' }}
-              </n-descriptions-item>
-              <n-descriptions-item label="时间戳">
-                {{ exportConfig.includeTimestamps ? '记录' : '不记录' }}
               </n-descriptions-item>
             </template>
           </n-descriptions>

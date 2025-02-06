@@ -108,7 +108,7 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
       if (current.sentences.length > 1) {
         result.push({ ...entry, sentences: current.sentences })
       } else {
-        result.push(entry)
+        result.push({ ...entry, sentences: current.sentences })  // 总是添加 sentences 字段
       }
       
       // 开始新的片段
@@ -139,7 +139,7 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
   if (current.sentences.length > 1) {
     result.push({ ...entry, sentences: current.sentences })
   } else {
-    result.push(entry)
+    result.push({ ...entry, sentences: current.sentences })  // 总是添加 sentences 字段
   }
   
   return result
@@ -179,7 +179,14 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
       : annotations.map((a: Annotation) => ({
           start: a.start,
           end: a.end,
-          text: a.text
+          text: a.text,
+          sentences: [{
+            start: 0,
+            end: a.end - a.start,
+            text: a.text,
+            originalStart: a.start,
+            originalEnd: a.end
+          }]
         }))
     
     const total = processAnnotations.length
@@ -292,7 +299,7 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
       }
 
       // 如果启用了时间戳模式且有多个句子，添加 sentences 字段
-      if (config?.includeTimestamps && annotation.sentences && annotation.sentences.length > 1) {
+      if (config?.includeTimestamps && annotation.sentences) {
         if (!config.keepGaps) {
           // 不保留间隔时，重新计算相对时间戳
           let currentTime = 0
