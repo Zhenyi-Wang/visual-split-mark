@@ -371,6 +371,33 @@ export const useProjectStore = defineStore('project', {
       } finally {
         this.loading = false
       }
+    },
+
+    // 清除当前音频文件的所有标注
+    async clearAllAnnotations() {
+      if (!this.currentProject || !this.currentAudioFile) {
+        throw new Error('No project or audio file selected')
+      }
+      
+      this.loading = true
+      this.error = null
+      try {
+        // 清空标注数组
+        this.annotations[this.currentAudioFile.id] = []
+        
+        // 保存更改
+        await storage.saveAnnotations(
+          this.currentProject.id,
+          this.currentAudioFile.id,
+          []
+        )
+      } catch (error) {
+        console.error('Failed to clear annotations:', error)
+        this.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        this.loading = false
+      }
     }
   }
 }) 

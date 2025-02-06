@@ -8,6 +8,14 @@
         <template #extra>
           <n-space>
             <n-button 
+              type="error" 
+              ghost 
+              @click="handleClearAll" 
+              :disabled="!annotations.length"
+            >
+              清除所有标注
+            </n-button>
+            <n-button 
               type="primary" 
               ghost 
               @click="handleTranscribe" 
@@ -400,6 +408,33 @@
         <n-space>
           <n-button @click="showTranscribeConfirmModal = false">取消</n-button>
           <n-button type="warning" @click="handleConfirmTranscribe">开始识别</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- 添加清除所有标注确认对话框 -->
+    <n-modal 
+      v-model:show="showClearAllModal" 
+      preset="dialog" 
+      title="清除所有标注" 
+      type="error"
+      :show-icon="true"
+    >
+      <template #default>
+        <n-space vertical>
+          <div>确定要清除当前音频的所有标注吗？</div>
+          <n-alert type="error" :show-icon="true">
+            <template #header>
+              <span style="font-weight: 500">此操作将删除 {{ annotations.length }} 条标注</span>
+            </template>
+            此操作不可恢复，请谨慎操作。
+          </n-alert>
+        </n-space>
+      </template>
+      <template #action>
+        <n-space>
+          <n-button @click="showClearAllModal = false">取消</n-button>
+          <n-button type="error" @click="handleConfirmClearAll">确定清除</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -1081,6 +1116,27 @@ const showInFileManager = async (path: string) => {
     })
   } catch (error) {
     message.error('无法打开文件夹')
+  }
+}
+
+// 添加清除所有标注确认对话框的状态
+const showClearAllModal = ref(false)
+
+// 添加清除所有标注的处理函数
+const handleClearAll = () => {
+  showClearAllModal.value = true
+}
+
+// 添加确认清除所有标注的处理函数
+const handleConfirmClearAll = async () => {
+  showClearAllModal.value = false
+  try {
+    // 清除所有标注
+    clearRegions()
+    await projectStore.clearAllAnnotations()
+    message.success('所有标注已清除')
+  } catch (error) {
+    message.error('清除标注失败')
   }
 }
 </script>
