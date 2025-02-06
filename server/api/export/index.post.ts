@@ -82,7 +82,7 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
       // 发送进度通知
       progressEmitter.emit(
         'progress',
-        dirname,
+        exportId,
         Math.round(((i + 1) / total) * 100)
       )
     }
