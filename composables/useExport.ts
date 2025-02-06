@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { exportManager } from '../utils/export'
 import type { AudioFile, Annotation } from '../types/project'
+import type { ExportConfig } from '../types/export'
+import { EXPORT_CONSTANTS } from '../types/export'
 import { useProjectStore } from '../stores/project'
 
 export function useExport() {
@@ -9,13 +11,21 @@ export function useExport() {
   const status = ref<'idle' | 'exporting' | 'completed' | 'failed'>('idle')
   const message = useMessage()
   const projectStore = useProjectStore()
+  const exportConfig = ref<ExportConfig>({ ...EXPORT_CONSTANTS.DEFAULT_CONFIG })
+  
+  // 重置状态
+  const resetStatus = () => {
+    status.value = 'idle'
+    progress.value = 0
+  }
   
   const exportAnnotations = async (projectName: string, audioFile: AudioFile) => {
     if (!audioFile) return
     
     try {
+      // 重置状态并开始导出
+      resetStatus()
       status.value = 'exporting'
-      progress.value = 0
       
       // 获取标注数据
       const annotations = projectStore.audioFileAnnotations
@@ -29,6 +39,7 @@ export function useExport() {
         projectName,
         audioFile,
         annotations,
+        exportConfig.value,
         (value) => {
           progress.value = value
         }
@@ -48,6 +59,8 @@ export function useExport() {
   return {
     exportAnnotations,
     progress,
-    status
+    status,
+    exportConfig,
+    resetStatus
   }
 } 

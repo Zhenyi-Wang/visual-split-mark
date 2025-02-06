@@ -20,6 +20,9 @@ import {
   NCard,
   NEmpty,
   NIcon,
+  NSwitch,
+  NRadio,
+  NRadioGroup,
   NProgress,
   NList,
   NListItem,
@@ -35,7 +38,9 @@ import {
   NPageHeader,
   NTag,
   NResult,
-  NSpin
+  NSpin,
+  NDescriptions,
+  NDescriptionsItem
 } from 'naive-ui'
 
 // 导入图标组件
@@ -61,6 +66,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       NCard,
       NEmpty,
       NIcon,
+      NSwitch,
+      NRadio,
+      NRadioGroup,
       NProgress,
       NList,
       NListItem,
@@ -76,7 +84,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       NPageHeader,
       NTag,
       NResult,
-      NSpin
+      NSpin,
+      NDescriptions,
+      NDescriptionsItem
     ]
   })
 

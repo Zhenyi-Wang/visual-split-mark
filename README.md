@@ -12,7 +12,7 @@
 
 本项目主要用于生成 [Whisper-Finetune](https://github.com/yeyupiaoling/Whisper-Finetune) 项目所需的微调数据集。为了提高标注效率，项目集成了 Whisper 转录功能，可以先通过 Whisper 进行初步转录，再进行人工校正。如果你需要一个简单的 Whisper API 服务，可以参考 [whisper-api](https://github.com/Zhenyi-Wang/whisper-api) 项目。
 
-## 主要功能
+## 主要功能r
 
 ### 音频可视化与标注
 - 波形可视化显示
@@ -77,34 +77,62 @@ yarn build
 - 项目数据：`storage/data/`
 - 导出数据：`storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/`
 
+### 导出选项
+
+导出数据集时支持以下选项：
+
+1. 合并模式
+   - 自动合并相邻的标注片段
+   - 合并条件：总时长在15-30秒之间
+   - 适用于长文本的语音识别训练
+
+2. 合并方式
+   - 严格模式：只合并时间间隔小于指定时长的标注
+   - 宽松模式：合并任意标注（不限间隔）
+     - 可选择是否保留标注之间的空白间隔
+     - 移除间隔时会自动调整时间戳
+
+3. 时间戳模式
+   - 在合并模式下记录原始标注的时间戳
+   - 可用于分析和校验合并后的数据
+   - 仅在合并模式开启时可用
+
 ### 导出格式
+
+#### 目录结构
 ```
-项目导出目录/
+storage/exports/YYYYMMDD_HHmmss_项目名_音频文件名/
 ├── dataset/                # 音频片段目录
 │   ├── uuid1.wav          # 音频片段文件
 │   ├── uuid2.wav
 │   └── ...
-└── dataset.json           # 数据集描述文件（JSONL格式）
+├── dataset.json           # 数据集描述文件（JSONL 格式）
+└── config.json           # 导出配置文件
 ```
 
-### dataset.json 格式
-```jsonl
-{"audio":{"path":"dataset/uuid1.wav"},"sentence":"标注文本","language":"Chinese","duration":2.34}
+#### config.json 格式
+```json
+{
+  "version": "1.0.0",           // 导出格式版本
+  "exportTime": "2024-02-06T14:38:30.000Z",  // 导出时间
+  "projectName": "项目名称",
+  "audioFile": {
+    "name": "原始音频文件名",
+    "duration": 3600.5          // 音频总时长（秒）
+  },
+  "config": {                   // 导出配置
+    "mergeSentences": true,     // 是否合并标注
+    "includeTimestamps": true,  // 是否包含时间戳
+    "mergeOnlyConsecutive": true, // 是否只合并连续标注
+    "minDuration": 15,          // 最小合并时长（秒）
+    "maxDuration": 30,          // 最大合并时长（秒）
+    "maxGap": 1,                // 最大间隔时长（秒）
+    "keepGaps": false           // 是否保留间隔
+  },
+  "stats": {                    // 导出统计
+    "totalAnnotations": 100,    // 原始标注数量
+    "exportedSegments": 80,     // 导出片段数量
+    "totalDuration": 1200.5     // 总时长（秒）
+  }
+}
 ```
-
-字段说明：
-- `audio.path`: 音频文件相对路径
-- `sentence`: 标注文本内容
-- `language`: 文本语言（固定为 "Chinese"）
-- `duration`: 音频片段时长（秒，保留 2 位小数）
-
-## 开发计划
-
-- [ ] 添加更多快捷键支持
-- [ ] 优化音频处理性能
-- [ ] 增加批量操作功能
-- [ ] 支持更多音频格式
-
-## 贡献
-
-目前项目已完成基本功能，欢迎试用并提出改进建议。后续会根据实际使用情况持续优化。如果你有任何想法或建议，欢迎提出 Issue 或 Pull Request。

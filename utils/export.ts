@@ -1,5 +1,5 @@
-import type { AudioFile, Annotation } from '~/types/project'
-import type { ExportResponse } from '~/types/export'
+import type { AudioFile, Annotation } from '../types/project'
+import type { ExportResponse, ExportConfig } from '../types/export'
 
 export const exportManager = {
   // 导出文件
@@ -7,6 +7,7 @@ export const exportManager = {
     projectName: string, 
     audioFile: AudioFile, 
     annotations: Annotation[],
+    config: ExportConfig,
     onProgress?: (progress: number) => void
   ): Promise<ExportResponse> {
     // 1. 生成导出 ID (UUID)
@@ -29,7 +30,8 @@ export const exportManager = {
         exportId,
         projectName,
         audioFile,
-        annotations
+        annotations,
+        config
       }
     })
 

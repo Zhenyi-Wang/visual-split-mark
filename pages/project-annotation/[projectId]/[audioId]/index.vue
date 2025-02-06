@@ -150,17 +150,147 @@
       </template>
     </n-modal>
 
-    <!-- 导出部分 -->
+    <!-- 导出配置对话框 -->
     <n-modal
       v-model:show="showExportModal"
       preset="card"
       title="导出数据集"
       style="width: 500px;"
-      :bordered="false"
-      :segmented="{ content: true }"
+      :closable="true"
+      :mask-closable="false"
     >
       <n-space vertical>
-        <template v-if="status === 'idle' || status === 'exporting'">
+        <!-- 导出选项 -->
+        <n-card title="导出选项" :bordered="false">
+          <n-space vertical>
+            <n-switch v-model:value="exportConfig.mergeSentences">
+              <template #checked>合并模式：开启</template>
+              <template #unchecked>合并模式：关闭</template>
+            </n-switch>
+            <n-text depth="3" style="margin-left: 24px">
+              自动合并相邻的标注
+            </n-text>
+
+            <template v-if="exportConfig.mergeSentences">
+              <n-divider />
+              
+              <n-form-item label="时长限制">
+                <n-space vertical>
+                  <n-space align="center">
+                    <n-input-number
+                      v-model:value="exportConfig.maxDuration"
+                      :min="1"
+                      :max="120"
+                      size="small"
+                      style="width: 100px;"
+                    />
+                    <n-text>秒</n-text>
+                  </n-space>
+                  <n-text depth="3" style="margin-left: 24px">
+                    合并后的音频片段不会超过此时长。在严格模式下，只有间隔小于最大间隔的标注才会合并；在宽松模式下，只要合并后不超过此时长即可合并。
+                  </n-text>
+                </n-space>
+              </n-form-item>
+
+              <n-form-item label="合并方式">
+                <n-space vertical>
+                  <n-radio-group v-model:value="exportConfig.mergeOnlyConsecutive">
+                    <n-space vertical>
+                      <n-radio :value="false">
+                        宽松：合并任意相邻标注（不限间隔）
+                      </n-radio>
+                      <n-radio :value="true">
+                        严格：仅合并间隔小于指定时长的标注
+                      </n-radio>
+                    </n-space>
+                  </n-radio-group>
+
+                  <div style="margin-left: 32px" v-if="exportConfig.mergeOnlyConsecutive">
+                    <n-form-item label="最大间隔">
+                      <n-space align="center">
+                        <n-input-number
+                          v-model:value="exportConfig.maxGap"
+                          :min="0.1"
+                          :max="5"
+                          :step="0.1"
+                          size="small"
+                          style="width: 100px;"
+                        />
+                        <n-text>秒</n-text>
+                      </n-space>
+                    </n-form-item>
+                  </div>
+
+                  <div style="margin-left: 32px" v-if="!exportConfig.mergeOnlyConsecutive">
+                    <n-form-item label="间隔处理">
+                      <n-switch v-model:value="exportConfig.keepGaps">
+                        <template #checked>保留间隔</template>
+                        <template #unchecked>移除间隔</template>
+                      </n-switch>
+                      <n-text depth="3" style="margin-left: 8px">
+                        {{ exportConfig.keepGaps ? '保留标注之间的空白片段' : '移除标注之间的空白片段' }}
+                      </n-text>
+                    </n-form-item>
+                  </div>
+                </n-space>
+              </n-form-item>
+
+              <n-switch 
+                v-model:value="exportConfig.includeTimestamps"
+              >
+                <template #checked>时间戳模式：开启</template>
+                <template #unchecked>时间戳模式：关闭</template>
+              </n-switch>
+              <n-text depth="3" style="margin-left: 24px">
+                记录原始标注的时间戳
+              </n-text>
+            </template>
+          </n-space>
+        </n-card>
+
+        <n-space justify="end">
+          <n-button @click="handleCloseExport">取消</n-button>
+          <n-button type="primary" @click="handleStartExport">开始导出</n-button>
+        </n-space>
+      </n-space>
+    </n-modal>
+
+    <!-- 导出进度对话框 -->
+    <n-modal
+      v-model:show="showExportProgress"
+      preset="card"
+      title="导出进度"
+      style="width: 600px;"
+      :closable="false"
+      :mask-closable="false"
+    >
+      <n-space vertical>
+        <!-- 导出配置摘要 -->
+        <n-card title="导出配置" :bordered="false" size="small">
+          <n-descriptions :column="1" size="small">
+            <n-descriptions-item label="合并模式">
+              {{ exportConfig.mergeSentences ? '开启' : '关闭' }}
+            </n-descriptions-item>
+            <template v-if="exportConfig.mergeSentences">
+              <n-descriptions-item label="时长限制">
+                {{ exportConfig.maxDuration }} 秒
+              </n-descriptions-item>
+              <n-descriptions-item label="合并方式">
+                {{ exportConfig.mergeOnlyConsecutive ? 
+                  `严格（间隔 < ${exportConfig.maxGap}秒）` : 
+                  exportConfig.keepGaps ? '宽松（保留间隔）' : '宽松（移除间隔）' }}
+              </n-descriptions-item>
+              <n-descriptions-item label="时间戳">
+                {{ exportConfig.includeTimestamps ? '记录' : '不记录' }}
+              </n-descriptions-item>
+            </template>
+          </n-descriptions>
+        </n-card>
+
+        <n-divider />
+
+        <!-- 进度显示 -->
+        <template v-if="status === 'exporting'">
           <n-progress
             type="line"
             :percentage="progress"
@@ -202,7 +332,12 @@
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="handleCloseExport">{{ status === 'completed' ? '完成' : '取消' }}</n-button>
+          <n-button 
+            @click="handleCloseExportProgress"
+            :disabled="status === 'exporting'"
+          >
+            {{ status === 'completed' ? '完成' : status === 'failed' ? '关闭' : '取消' }}
+          </n-button>
         </n-space>
       </template>
     </n-modal>
@@ -792,40 +927,48 @@ const handleTranscribe = async () => {
 
 // 导出相关的状态
 const showExportModal = ref(false)
-const { exportAnnotations, progress, status } = useExport()
+const showExportProgress = ref(false)
+const { exportAnnotations, progress, status, exportConfig, resetStatus } = useExport()
 const exportPath = ref('')
 const exportError = ref('')
 
-// 监听模态框显示状态，显示时自动开始导出
-watch(showExportModal, async (show) => {
-  if (show) {
-    if (!currentProject.value || !currentAudioFile.value) {
-      message.error('当前项目或音频文件不存在')
-      showExportModal.value = false
-      return
-    }
-
-    try {
-      const result = await exportAnnotations(
-        currentProject.value.name,
-        currentAudioFile.value
-      )
-      if (result) {
-        exportPath.value = result.path
-      }
-    } catch (error) {
-      exportError.value = error instanceof Error ? error.message : '导出失败'
-      message.error('导出失败：' + exportError.value)
-    }
+// 修改导出相关的代码
+const handleStartExport = async () => {
+  if (!currentProject.value || !currentAudioFile.value) {
+    message.error('当前项目或音频文件不存在')
+    showExportModal.value = false
+    return
   }
-})
 
-// 处理关闭模态框
+  try {
+    showExportModal.value = false
+    showExportProgress.value = true
+    const result = await exportAnnotations(
+      currentProject.value.name,
+      currentAudioFile.value
+    )
+    if (result) {
+      exportPath.value = result.path
+    }
+  } catch (error) {
+    exportError.value = error instanceof Error ? error.message : '导出失败'
+    message.error('导出失败：' + exportError.value)
+  }
+}
+
+// 处理关闭配置对话框
 const handleCloseExport = () => {
   showExportModal.value = false
+}
+
+// 处理关闭进度对话框
+const handleCloseExportProgress = () => {
+  if (status.value === 'exporting') return
+  showExportProgress.value = false
   if (status.value === 'completed' || status.value === 'failed') {
     exportPath.value = ''
     exportError.value = ''
+    resetStatus()
   }
 }
 
