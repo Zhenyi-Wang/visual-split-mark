@@ -4,16 +4,13 @@ import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 export default defineEventHandler(async (event) => {
-  const { audioPath, start, end } = await readBody(event)
+  const { audioPath, start, end, outputPath } = await readBody(event)
   
   try {
-    // 创建临时目录
-    const tempDir = resolve(process.cwd(), 'storage/temp')
-    await mkdir(tempDir, { recursive: true })
-    console.log('临时目录已创建:', tempDir)
-    
-    // 生成输出文件路径
-    const outputPath = resolve(tempDir, `${randomUUID()}.wav`)
+    // 确保输出目录存在
+    const outputDir = resolve(process.cwd(), outputPath).replace(/[^/]+$/, '')
+    await mkdir(outputDir, { recursive: true })
+    console.log('输出目录已创建:', outputDir)
     
     // 确保输入音频路径是绝对路径
     const inputPath = resolve(process.cwd(), audioPath)

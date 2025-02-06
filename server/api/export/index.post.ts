@@ -41,6 +41,7 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
     for (let i = 0; i < annotations.length; i++) {
       const annotation = annotations[i]
       const uuid = crypto.randomUUID()
+      const wavPath = resolve(datasetPath, `${uuid}.wav`)
 
       console.log(`处理第 ${i + 1}/${total} 个标注:`, {
         start: annotation.start,
@@ -58,19 +59,13 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
           audioPath: audioFile.wavPath,
           start: annotation.start,
           end: annotation.end,
+          outputPath: wavPath
         },
       })
 
-      if (!response?.success || !response?.data?.path) {
-        throw new Error('音频提取失败：未获取到输出文件路径')
+      if (!response?.success) {
+        throw new Error('音频提取失败')
       }
-
-      console.log('音频片段已提取:', response.data.path)
-
-      // 复制音频文件到目标目录
-      const wavPath = resolve(datasetPath, `${uuid}.wav`)
-      const wavBuffer = await loadFile(response.data.path)
-      await writeFile(wavPath, wavBuffer)
 
       console.log('音频片段已保存:', wavPath)
 
