@@ -88,6 +88,9 @@
                   <n-text v-if="file.duration" depth="3">
                     时长: {{ formatDuration(file.duration) }}
                   </n-text>
+                  <n-text depth="3">
+                    标注数量: {{ getAnnotationCount(file.id) }}
+                  </n-text>
                 </n-space>
               </template>
             </n-thing>
@@ -319,5 +322,10 @@ const handleEditAnnotations = (file: AudioFile) => {
   }
   projectStore.setCurrentAudioFile(file)
   router.push(`/project-annotation/${currentProject.value.id}/${file.id}`)
+}
+
+// 添加获取标注数量的计算函数
+const getAnnotationCount = (audioFileId: string) => {
+  return projectStore.annotations[audioFileId]?.length || 0
 }
 </script> 
