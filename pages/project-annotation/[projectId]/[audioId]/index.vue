@@ -369,6 +369,40 @@
         </n-space>
       </n-space>
     </n-modal>
+
+    <!-- 添加识别确认对话框 -->
+    <n-modal
+      v-model:show="showTranscribeConfirmModal"
+      preset="dialog"
+      title="确认识别文本"
+      type="warning"
+      :show-icon="true"
+    >
+      <n-space vertical>
+        <div>此操作将使用 Whisper API 识别音频中的文本。</div>
+        <template v-if="annotations.length > 0">
+          <n-alert type="warning" :show-icon="true">
+            <template #header>
+              <span style="font-weight: 500">当前音频已有 {{ annotations.length }} 条标注</span>
+            </template>
+            新的识别结果将追加到现有标注之后，请谨慎操作。
+          </n-alert>
+        </template>
+        <div>注意：</div>
+        <ul style="margin: 0; padding-left: 20px;">
+          <li>识别过程可能需要较长时间，请耐心等待</li>
+          <li>识别结果可能不够准确，建议在识别后进行人工校正</li>
+          <li>如果已有标注，新的识别结果会追加到现有标注之后</li>
+        </ul>
+      </n-space>
+
+      <template #action>
+        <n-space>
+          <n-button @click="showTranscribeConfirmModal = false">取消</n-button>
+          <n-button type="warning" @click="handleConfirmTranscribe">开始识别</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -392,6 +426,7 @@ import {
   AddOutline as IconAdd,
   RemoveOutline as IconRemove
 } from '@vicons/ionicons5'
+import { WarningOutlined } from '@vicons/antd'
 import { useViewportStore } from '~/stores/viewport'
 import type { MessageReactive } from 'naive-ui'
 import { NSpin } from 'naive-ui'
@@ -905,9 +940,22 @@ const transcribeResult = ref<{
   message: ''
 })
 
+// 添加识别确认对话框的状态
+const showTranscribeConfirmModal = ref(false)
+
 // 修改识别处理函数
-const handleTranscribe = async () => {
-  if (!currentAudioFile.value || !currentProject.value?.whisperApiUrl) return
+const handleTranscribe = () => {
+  if (!currentProject.value?.whisperApiUrl) {
+    message.error('未配置 Whisper API URL')
+    return
+  }
+  showTranscribeConfirmModal.value = true
+}
+
+// 添加确认识别的处理函数
+const handleConfirmTranscribe = async () => {
+  if (!currentAudioFile.value) return
+  showTranscribeConfirmModal.value = false
   transcribing.value = true
   try {
     const annotations = await transcribe(currentAudioFile.value)
