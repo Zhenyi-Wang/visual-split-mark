@@ -465,7 +465,7 @@ watch(showTextInputModal, (newValue) => {
 })
 
 // 添加视图状态管理
-const viewState = useViewState(route.params.id as string)
+const viewState = useViewState(route.params.audioId as string)
 
 // 添加防抖保存
 const debouncedUpdateState = useDebounceFn((state: Partial<AudioViewState>) => {
@@ -520,7 +520,9 @@ watch(
       pixelsPerSecond: newPixelsPerSecond
     })
   },
-  { immediate: true }
+  { 
+    immediate: false  // 改为 false，等初始化完成后再开始监听
+  }
 )
 
 // 在初始化完成后恢复状态
@@ -529,21 +531,27 @@ const restoreViewState = async () => {
 
   const state = viewState.viewState.value
   
-  // 恢复视口状态
+  // 先设置视口范围和缩放比例
   viewport.setViewport(state.startTime, state.endTime)
   pixelsPerSecond.value = state.pixelsPerSecond
   
+  // 等待下一个渲染周期
   await nextTick()
   
-  // 恢复播放时间和滚动位置
+  // 恢复播放时间
   seek(state.currentTime)
-  await centerViewOnTime(state.currentTime)
   
-  // 恢复滚动位置
+  // 等待波形图重绘完成
+  await updateDrawing()
+  
+  // 最后恢复滚动位置
   const container = document.querySelector('.waveform-container')
   if (container) {
     container.scrollLeft = state.scrollPosition
   }
+  
+  // 居中到当前播放位置
+  await centerViewOnTime(state.currentTime)
 }
 
 onMounted(async () => {
@@ -618,6 +626,9 @@ onMounted(async () => {
           addRegion(annotation)
         })
 
+        // 恢复视口状态
+        await restoreViewState()
+
       } catch (error) {
         message.error('音频加载失败')
       }
@@ -676,7 +687,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 const handleBack = () => {
-  const projectId = route.params.id
+  const projectId = route.params.projectId
   router.push(`/project/${projectId}`)
 }
 
