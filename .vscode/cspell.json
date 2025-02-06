@@ -1,0 +1,13 @@
+{
+  "version": "0.2",
+  "ignorePaths": [
+    "storage/**",
+    "storage",
+    "storage/*",
+    "storage/data/*",
+    "storage/data/**"
+  ],
+  "words": [],
+  "ignoreWords": [],
+  "import": []
+}
