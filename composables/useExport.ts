@@ -18,8 +18,7 @@ export function useExport() {
       progress.value = 0
       
       // 获取标注数据
-      const annotations = projectStore.annotations
-        .filter((a: Annotation) => a.audioFileId === audioFile.id)
+      const annotations = projectStore.audioFileAnnotations
       
       if (!annotations.length) {
         throw new Error('没有找到标注数据')

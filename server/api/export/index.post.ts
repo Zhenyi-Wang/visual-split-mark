@@ -21,7 +21,12 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
     .replace(/[\\/:*?"<>|]/g, '_')
     .replace(/\.[^/.]+$/, '')
   const dirname = `${timestamp}_${sanitizedProjectName}_${sanitizedAudioName}`
-  const exportPath = resolve(process.cwd(), 'storage/exports', dirname)
+  
+  // 确保导出根目录存在
+  const exportRoot = resolve(process.cwd(), 'storage/exports')
+  await mkdir(exportRoot, { recursive: true })
+  
+  const exportPath = resolve(exportRoot, dirname)
   const datasetPath = resolve(exportPath, 'dataset')
 
   try {

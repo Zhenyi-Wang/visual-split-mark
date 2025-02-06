@@ -176,10 +176,17 @@
           <n-result
             status="success"
             title="导出成功"
-            description="数据集已导出到服务器："
+            description="数据集已导出到以下目录："
           >
             <template #footer>
-              <n-text code>{{ exportPath }}</n-text>
+              <n-space vertical>
+                <n-text code>{{ exportPath }}</n-text>
+                <n-space justify="center">
+                  <n-button @click="showInFileManager(exportPath)">
+                    在文件管理器中显示
+                  </n-button>
+                </n-space>
+              </n-space>
             </template>
           </n-result>
         </template>
