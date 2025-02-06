@@ -20,13 +20,13 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
   start: number
   end: number
   text: string
-  sentences?: { start: number; end: number; text: string }[]
+  sentences?: { start: number; end: number; text: string; originalStart: number; originalEnd: number }[]
 }[] {
   const result: {
     start: number
     end: number
     text: string
-    sentences?: { start: number; end: number; text: string }[]
+    sentences?: { start: number; end: number; text: string; originalStart: number; originalEnd: number }[]
   }[] = []
   
   // 按开始时间排序
@@ -36,8 +36,14 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
     start: sorted[0].start,
     end: sorted[0].end,
     text: sorted[0].text,
-    actualDuration: sorted[0].end - sorted[0].start,  // 添加实际时长计数
-    sentences: [{ start: sorted[0].start, end: sorted[0].end, text: sorted[0].text }] as { start: number; end: number; text: string }[]
+    actualDuration: sorted[0].end - sorted[0].start,
+    sentences: [{
+      start: 0,
+      end: sorted[0].end - sorted[0].start,
+      text: sorted[0].text,
+      originalStart: sorted[0].start,
+      originalEnd: sorted[0].end
+    }] as { start: number; end: number; text: string; originalStart: number; originalEnd: number }[]
   }
   
   for (let i = 1; i < sorted.length; i++) {
@@ -61,23 +67,33 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
       if (!config.keepGaps && gap > 0.01) {
         // 添加当前句子
         current.sentences.push({
-          start: Number(current.actualDuration.toFixed(2)),
-          end: Number((current.actualDuration + annotationDuration).toFixed(2)),
-          text: annotation.text
+          start: current.actualDuration,
+          end: current.actualDuration + annotationDuration,
+          text: annotation.text,
+          originalStart: annotation.start,
+          originalEnd: annotation.end
         })
         // 更新结束时间、文本和实际时长
-        current.end = current.end + annotationDuration
+        current.end = annotation.end
         current.text += annotation.text
         current.actualDuration += annotationDuration
       } else {
         // 保留间隔，直接添加
         current.end = annotation.end
         current.text += annotation.text
-        current.actualDuration = annotation.end - current.start
+        current.actualDuration = config.keepGaps 
+          ? annotation.end - current.start  // 保留间隔时使用完整时长
+          : current.actualDuration + annotationDuration  // 不保留间隔时累加实际语音时长
         current.sentences.push({
-          start: Number((annotation.start - current.start).toFixed(2)),
-          end: Number((annotation.end - current.start).toFixed(2)),
-          text: annotation.text
+          start: config.keepGaps 
+            ? annotation.start - current.start  // 保留间隔时使用相对时间
+            : current.actualDuration - annotationDuration,  // 不保留间隔时使用累计时长
+          end: config.keepGaps
+            ? annotation.end - current.start
+            : current.actualDuration,
+          text: annotation.text,
+          originalStart: annotation.start,
+          originalEnd: annotation.end
         })
       }
     } else {
@@ -85,7 +101,8 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
       const entry = {
         start: current.start,
         end: current.end,
-        text: current.text
+        text: current.text,
+        duration: current.actualDuration  // 添加实际持续时间
       }
       // 如果有多个句子，添加 sentences 字段
       if (current.sentences.length > 1) {
@@ -100,7 +117,13 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
         end: annotation.end,
         text: annotation.text,
         actualDuration: annotationDuration,
-        sentences: [{ start: 0, end: annotation.end - annotation.start, text: annotation.text }]
+        sentences: [{
+          start: 0,
+          end: annotationDuration,
+          text: annotation.text,
+          originalStart: annotation.start,
+          originalEnd: annotation.end
+        }]
       }
     }
   }
@@ -109,7 +132,8 @@ function mergeAnnotations(annotations: Annotation[], config: ExportConfig): {
   const entry = {
     start: current.start,
     end: current.end,
-    text: current.text
+    text: current.text,
+    duration: current.actualDuration  // 添加实际持续时间
   }
   // 如果有多个句子，添加 sentences 字段
   if (current.sentences.length > 1) {
@@ -187,8 +211,8 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
             method: 'POST',
             body: {
               audioPath: audioFile.wavPath,
-              start: sentence.start + annotation.start,
-              end: sentence.end + annotation.start,
+              start: sentence.originalStart,  // 使用原始时间戳
+              end: sentence.originalEnd,
               outputPath: tempPath
             },
           })
@@ -244,7 +268,17 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
 
       console.log('音频片段已保存:', wavPath)
 
-      const duration = Number((annotation.end - annotation.start).toFixed(2))
+      // 计算实际持续时间
+      let duration: number
+      if (config?.mergeSentences && !config.keepGaps && annotation.sentences && annotation.sentences.length > 1) {
+        // 不保留间隔时，duration 是所有句子的实际时长之和
+        duration = Number(annotation.sentences.reduce((sum: number, sentence: { start: number; end: number }) => {
+          return sum + (sentence.end - sentence.start)
+        }, 0).toFixed(2))
+      } else {
+        duration = Number((annotation.end - annotation.start).toFixed(2))
+      }
+
       totalDuration += duration
 
       // 添加数据集条目
@@ -259,11 +293,26 @@ export default defineEventHandler(async (event): Promise<ExportResponse> => {
 
       // 如果启用了时间戳模式且有多个句子，添加 sentences 字段
       if (config?.includeTimestamps && annotation.sentences && annotation.sentences.length > 1) {
-        entry.sentences = annotation.sentences.map((s: { start: number; end: number; text: string }) => ({
-          start: formatTimestamp(s.start, duration),
-          end: formatTimestamp(s.end, duration),
-          text: s.text
-        }))
+        if (!config.keepGaps) {
+          // 不保留间隔时，重新计算相对时间戳
+          let currentTime = 0
+          entry.sentences = annotation.sentences.map((s: { start: number; end: number; text: string }) => {
+            const sentenceDuration = Number((s.end - s.start).toFixed(2))
+            const result = {
+              start: Number(currentTime.toFixed(2)),
+              end: Number((currentTime + sentenceDuration).toFixed(2)),
+              text: s.text
+            }
+            currentTime = Number((currentTime + sentenceDuration).toFixed(2))
+            return result
+          })
+        } else {
+          entry.sentences = annotation.sentences.map((s: { start: number; end: number; text: string }) => ({
+            start: Number(s.start.toFixed(2)),
+            end: Number(s.end.toFixed(2)),
+            text: s.text
+          }))
+        }
       }
 
       dataset.push(entry)
