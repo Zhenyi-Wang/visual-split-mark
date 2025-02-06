@@ -44,6 +44,75 @@ export function useAudioVisualizer() {
   const mergeLeftButtonBounds = ref<ButtonBounds | null>(null)
   const mergeRightButtonBounds = ref<ButtonBounds | null>(null)
 
+  // 添加合并标注的处理函数
+  const handleMerge = async (
+    id: string,
+    direction: MergeDirection,
+    projectId: string,
+    audioFileId: string,
+    onAnnotationChangeHandler?: AnnotationChangeHandler
+  ) => {
+    const region = regionManager.getRegion(id)
+    if (!region) return
+
+    // 查找相邻标注
+    const regions = regionManager.getAllRegions()
+    let adjacentId: string | null = null
+    let adjacentRegion: Region | null = null
+
+    for (const [otherId, otherRegion] of regions.entries()) {
+      if (otherId === id) continue
+      if (direction === 'left' && Math.abs(otherRegion.end - region.start) < 0.01) {
+        adjacentId = otherId
+        adjacentRegion = otherRegion
+        break
+      }
+      if (direction === 'right' && Math.abs(otherRegion.start - region.end) < 0.01) {
+        adjacentId = otherId
+        adjacentRegion = otherRegion
+        break
+      }
+    }
+
+    if (!adjacentId || !adjacentRegion) {
+      message.warning('没有找到相邻标注')
+      return
+    }
+
+    try {
+      // 调用合并 API
+      const response = await $fetch<MergeAnnotationResponse>('/api/annotations/merge', {
+        method: 'POST',
+        body: {
+          projectId,
+          audioFileId,
+          targetId: adjacentId,  // 相邻标注作为目标
+          sourceId: id,          // 当前标注作为源
+          direction
+        }
+      })
+
+      if (response.success && response.annotation) {
+        // 更新区域
+        regionManager.removeRegion(id)  // 删除源标注（当前标注）
+        regionManager.updateRegion(response.annotation)  // 更新目标标注（相邻标注）
+        
+        // 通知外部更新标注
+        if (onAnnotationChangeHandler) {
+          // 通知删除源标注
+          onAnnotationChangeHandler({ ...region, id, deleted: true } as any)
+          // 通知更新目标标注
+          onAnnotationChangeHandler(response.annotation)
+        }
+        
+        message.success('标注已合并')
+      }
+    } catch (error) {
+      console.error('Failed to merge annotations:', error)
+      message.error('合并失败')
+    }
+  }
+
   const initialize = async (
     container: HTMLElement, 
     audioFile: AudioFile, 
@@ -253,70 +322,14 @@ export function useAudioVisualizer() {
       }
     } 
 
-    // 辅助函数：处理标注合并
-    const handleMerge = async (id: string, direction: MergeDirection) => {
-      if (!id) return
-      const region = regionManager.getRegion(id)
-      if (!region) return
-
-      // 查找相邻标注
-      let adjacentId: string | null = null
-      for (const [otherId, otherRegion] of regionManager.getAllRegions()) {
-        if (otherId === id) continue
-        if (direction === 'left' && Math.abs(otherRegion.end - region.start) < 0.01) {
-          adjacentId = otherId
-          break
-        }
-        if (direction === 'right' && Math.abs(otherRegion.start - region.end) < 0.01) {
-          adjacentId = otherId
-          break
-        }
-      }
-
-      if (adjacentId) {
-        try {
-          // 调用合并 API
-          const response = await $fetch<MergeAnnotationResponse>('/api/annotations/merge', {
-            method: 'POST',
-            body: {
-              targetId: adjacentId,  // 相邻标注作为目标
-              sourceId: id,          // 当前标注作为源
-              direction
-            }
-          })
-
-          // 更新本地状态
-          if (response.success) {
-            // 先添加合并后的标注
-            regionManager.updateRegion(response.annotation)
-            // 再删除源标注（当前标注）
-            regionManager.removeRegion(id)
-            
-            // 如果有回调，通知外部
-            if (onAnnotationChangeHandler) {
-              // 通知合并后的标注更新
-              onAnnotationChangeHandler(response.annotation)
-              // 通知源标注删除
-              onAnnotationChangeHandler({ id, deleted: true } as any)
-            }
-          }
-        } catch (error) {
-          console.error('合并标注失败:', error)
-          // 显示错误提示
-          message.error('合并标注失败，请重试')
-        }
-      }
-
-      // 清理状态
-      interactionHandler.clearAll()
-      updateDrawing()
-    }
-
+    // 设置合并按钮回调
     interactionHandler.onMergeLeftButtonClick.value = (id) => {
-      if (id) handleMerge(id, 'left')
+      if (!id) return
+      handleMerge(id, 'left', audioFile.projectId, audioFile.id, onAnnotationChangeHandler)
     }
     interactionHandler.onMergeRightButtonClick.value = (id) => {
-      if (id) handleMerge(id, 'right')
+      if (!id) return
+      handleMerge(id, 'right', audioFile.projectId, audioFile.id, onAnnotationChangeHandler)
     }
 
     // 初始绘制
@@ -551,6 +564,7 @@ export function useAudioVisualizer() {
     onDeleteButtonClick: interactionHandler.onDeleteButtonClick,
     onMergeLeftButtonClick: interactionHandler.onMergeLeftButtonClick,
     onMergeRightButtonClick: interactionHandler.onMergeRightButtonClick,
+    handleMerge,
     updateDrawing
   }
 } 

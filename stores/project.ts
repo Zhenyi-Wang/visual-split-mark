@@ -2,28 +2,36 @@ import { defineStore } from 'pinia'
 import type { Project, AudioFile, Annotation } from '~/types/project'
 import { storage } from '~/utils/storage'
 
+interface ProjectState {
+  projects: Project[]
+  audioFiles: AudioFile[]
+  annotations: Record<string, Annotation[]>
+  currentProject: Project | null
+  currentAudioFile: AudioFile | null
+  loading: boolean
+  error: string | null
+}
+
 export const useProjectStore = defineStore('project', {
-  state: () => ({
-    projects: [] as Project[],
-    audioFiles: [] as AudioFile[],
-    annotations: [] as Annotation[],
-    currentProject: null as Project | null,
-    currentAudioFile: null as AudioFile | null,
+  state: (): ProjectState => ({
+    projects: [],
+    audioFiles: [],
+    annotations: {},
+    currentProject: null,
+    currentAudioFile: null,
     loading: false,
-    error: null as string | null
+    error: null
   }),
 
   getters: {
-    projectAudioFiles: (state) => {
-      const currentProject = state.currentProject
-      if (!currentProject) return []
-      return state.audioFiles.filter(f => f.projectId === currentProject.id)
+    projectAudioFiles: (state): AudioFile[] => {
+      return state.audioFiles
     },
 
-    audioFileAnnotations: (state) => {
+    audioFileAnnotations: (state): Annotation[] => {
       const currentAudioFile = state.currentAudioFile
       if (!currentAudioFile) return []
-      return state.annotations.filter(a => a.audioFileId === currentAudioFile.id)
+      return state.annotations[currentAudioFile.id] || []
     }
   },
 
@@ -32,46 +40,60 @@ export const useProjectStore = defineStore('project', {
       this.loading = true
       this.error = null
       try {
-        const data = await storage.loadData()
-        this.projects = Array.isArray(data.projects) ? data.projects.map(project => ({
+        // 只加载项目列表
+        const projects = await storage.listProjects()
+        this.projects = projects.map(project => ({
           ...project,
           createdAt: project.createdAt ? new Date(project.createdAt) : new Date(),
           updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date()
-        })) : []
-        this.audioFiles = Array.isArray(data.audioFiles) ? data.audioFiles.map(file => ({
-          ...file,
-          createdAt: file.createdAt ? new Date(file.createdAt) : new Date(),
-          updatedAt: file.updatedAt ? new Date(file.updatedAt) : new Date()
-        })) : []
-        this.annotations = Array.isArray(data.annotations) ? data.annotations.map(annotation => ({
-          ...annotation,
-          createdAt: annotation.createdAt ? new Date(annotation.createdAt) : new Date(),
-          updatedAt: annotation.updatedAt ? new Date(annotation.updatedAt) : new Date()
-        })) : []
+        }))
+        
+        // 清空其他数据
+        this.audioFiles = []
+        this.annotations = {}
+        this.currentProject = null
+        this.currentAudioFile = null
       } catch (error) {
-        console.error('Failed to load data:', error)
+        console.error('Failed to load projects:', error)
         this.error = error instanceof Error ? error.message : String(error)
         this.projects = []
-        this.audioFiles = []
-        this.annotations = []
         throw error
       } finally {
         this.loading = false
       }
     },
 
-    async saveAll() {
+    async loadProject(projectId: string) {
       this.loading = true
       this.error = null
       try {
-        await storage.saveData({
-          projects: this.projects,
-          audioFiles: this.audioFiles,
-          annotations: this.annotations,
-          settings: {}
-        })
+        const data = await storage.loadProject(projectId)
+        
+        // 更新当前项目
+        const project = {
+          ...data.project,
+          createdAt: data.project.createdAt ? new Date(data.project.createdAt) : new Date(),
+          updatedAt: data.project.updatedAt ? new Date(data.project.updatedAt) : new Date()
+        }
+        this.currentProject = project
+        
+        // 更新项目列表中的项目数据
+        const index = this.projects.findIndex(p => p.id === projectId)
+        if (index > -1) {
+          this.projects[index] = project
+        }
+        
+        // 更新音频文件
+        this.audioFiles = data.audioFiles.map(file => ({
+          ...file,
+          createdAt: file.createdAt ? new Date(file.createdAt) : new Date(),
+          updatedAt: file.updatedAt ? new Date(file.updatedAt) : new Date()
+        }))
+        
+        // 更新标注
+        this.annotations = data.annotations
       } catch (error) {
-        console.error('Failed to save data:', error)
+        console.error('Failed to load project:', error)
         this.error = error instanceof Error ? error.message : String(error)
         throw error
       } finally {
@@ -81,6 +103,13 @@ export const useProjectStore = defineStore('project', {
 
     setCurrentProject(project: Project | null) {
       this.currentProject = project
+      if (project) {
+        this.loadProject(project.id)
+      } else {
+        this.audioFiles = []
+        this.annotations = {}
+        this.currentAudioFile = null
+      }
     },
 
     setCurrentAudioFile(audioFile: AudioFile | null) {
@@ -99,8 +128,12 @@ export const useProjectStore = defineStore('project', {
           createdAt: new Date(),
           updatedAt: new Date()
         }
+        
+        // 保存项目
+        await storage.saveProject(project)
+        
+        // 更新状态
         this.projects.push(project)
-        await this.saveAll()
         return project
       } catch (error) {
         console.error('Failed to create project:', error)
@@ -115,10 +148,16 @@ export const useProjectStore = defineStore('project', {
       this.loading = true
       this.error = null
       try {
+        // 更新项目
+        await storage.saveProject(project)
+        
+        // 更新状态
         const index = this.projects.findIndex(p => p.id === project.id)
         if (index > -1) {
           this.projects[index] = project
-          await this.saveAll()
+        }
+        if (this.currentProject?.id === project.id) {
+          this.currentProject = project
         }
       } catch (error) {
         console.error('Failed to update project:', error)
@@ -133,17 +172,19 @@ export const useProjectStore = defineStore('project', {
       this.loading = true
       this.error = null
       try {
+        // 删除项目
+        await storage.deleteProject(id)
+        
+        // 更新状态
         const index = this.projects.findIndex(p => p.id === id)
         if (index > -1) {
           this.projects.splice(index, 1)
-          // 删除相关的音频文件和标注
-          this.audioFiles = this.audioFiles.filter(f => f.projectId !== id)
-          const audioFileIds = this.audioFiles.map(f => f.id)
-          this.annotations = this.annotations.filter(a => audioFileIds.includes(a.audioFileId))
-          await this.saveAll()
-          if (this.currentProject?.id === id) {
-            this.currentProject = null
-          }
+        }
+        if (this.currentProject?.id === id) {
+          this.currentProject = null
+          this.audioFiles = []
+          this.annotations = {}
+          this.currentAudioFile = null
         }
       } catch (error) {
         console.error('Failed to delete project:', error)
@@ -155,11 +196,17 @@ export const useProjectStore = defineStore('project', {
     },
 
     async addAudioFile(audioFile: AudioFile) {
+      if (!this.currentProject) throw new Error('No project selected')
+      
       this.loading = true
       this.error = null
       try {
+        // 添加到列表
         this.audioFiles.push(audioFile)
-        await this.saveAll()
+        
+        // 保存音频文件列表
+        await storage.saveAudioFiles(this.currentProject.id, this.audioFiles)
+        
         return audioFile
       } catch (error) {
         console.error('Failed to add audio file:', error)
@@ -171,13 +218,22 @@ export const useProjectStore = defineStore('project', {
     },
 
     async updateAudioFile(audioFile: AudioFile) {
+      if (!this.currentProject) throw new Error('No project selected')
+      
       this.loading = true
       this.error = null
       try {
+        // 更新列表
         const index = this.audioFiles.findIndex(f => f.id === audioFile.id)
         if (index > -1) {
           this.audioFiles[index] = audioFile
-          await this.saveAll()
+          
+          // 保存音频文件列表
+          await storage.saveAudioFiles(this.currentProject.id, this.audioFiles)
+          
+          if (this.currentAudioFile?.id === audioFile.id) {
+            this.currentAudioFile = audioFile
+          }
         }
       } catch (error) {
         console.error('Failed to update audio file:', error)
@@ -189,15 +245,25 @@ export const useProjectStore = defineStore('project', {
     },
 
     async deleteAudioFile(id: string) {
+      if (!this.currentProject) throw new Error('No project selected')
+      
       this.loading = true
       this.error = null
       try {
+        // 更新列表
         const index = this.audioFiles.findIndex(f => f.id === id)
         if (index > -1) {
           this.audioFiles.splice(index, 1)
-          // 删除相关的标注
-          this.annotations = this.annotations.filter(a => a.audioFileId !== id)
-          await this.saveAll()
+          
+          // 删除标注
+          delete this.annotations[id]
+          
+          // 保存更改
+          await Promise.all([
+            storage.saveAudioFiles(this.currentProject.id, this.audioFiles),
+            storage.saveAnnotations(this.currentProject.id, id, [])
+          ])
+          
           if (this.currentAudioFile?.id === id) {
             this.currentAudioFile = null
           }
@@ -212,19 +278,36 @@ export const useProjectStore = defineStore('project', {
     },
 
     async updateAnnotation(annotation: Annotation) {
+      if (!this.currentProject || !this.currentAudioFile) {
+        throw new Error('No project or audio file selected')
+      }
+      
       this.loading = true
       this.error = null
       try {
-        const index = this.annotations.findIndex(a => a.id === annotation.id)
+        // 确保数组存在
+        if (!this.annotations[this.currentAudioFile.id]) {
+          this.annotations[this.currentAudioFile.id] = []
+        }
+        
+        // 更新或添加标注
+        const annotations = this.annotations[this.currentAudioFile.id]
+        const index = annotations.findIndex((a: Annotation) => a.id === annotation.id)
         if (index > -1) {
-          this.annotations[index] = annotation
+          annotations[index] = annotation
         } else {
-          this.annotations.push({
+          annotations.push({
             ...annotation,
             id: crypto.randomUUID()
           })
         }
-        await this.saveAll()
+        
+        // 保存标注
+        await storage.saveAnnotations(
+          this.currentProject.id,
+          this.currentAudioFile.id,
+          annotations
+        )
       } catch (error) {
         console.error('Failed to update annotation:', error)
         this.error = error instanceof Error ? error.message : String(error)
@@ -235,13 +318,25 @@ export const useProjectStore = defineStore('project', {
     },
 
     async deleteAnnotation(id: string) {
+      if (!this.currentProject || !this.currentAudioFile) {
+        throw new Error('No project or audio file selected')
+      }
+      
       this.loading = true
       this.error = null
       try {
-        const index = this.annotations.findIndex(a => a.id === id)
+        // 更新标注列表
+        const annotations = this.annotations[this.currentAudioFile.id] || []
+        const index = annotations.findIndex((a: Annotation) => a.id === id)
         if (index > -1) {
-          this.annotations.splice(index, 1)
-          await this.saveAll()
+          annotations.splice(index, 1)
+          
+          // 保存更改
+          await storage.saveAnnotations(
+            this.currentProject.id,
+            this.currentAudioFile.id,
+            annotations
+          )
         }
       } catch (error) {
         console.error('Failed to delete annotation:', error)
@@ -253,19 +348,22 @@ export const useProjectStore = defineStore('project', {
     },
 
     async updateAnnotations(annotations: Annotation[]) {
+      if (!this.currentProject || !this.currentAudioFile) {
+        throw new Error('No project or audio file selected')
+      }
+      
       this.loading = true
       this.error = null
       try {
-        // 更新或添加每个标注
-        for (const annotation of annotations) {
-          const index = this.annotations.findIndex(a => a.id === annotation.id)
-          if (index > -1) {
-            this.annotations[index] = annotation
-          } else {
-            this.annotations.push(annotation)
-          }
-        }
-        await this.saveAll()
+        // 更新标注
+        this.annotations[this.currentAudioFile.id] = annotations
+        
+        // 保存更改
+        await storage.saveAnnotations(
+          this.currentProject.id,
+          this.currentAudioFile.id,
+          annotations
+        )
       } catch (error) {
         console.error('Failed to update annotations:', error)
         this.error = error instanceof Error ? error.message : String(error)

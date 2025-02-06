@@ -124,6 +124,7 @@ import {
 import type { AudioFile } from '~/types/project'
 import { uploader } from '~/utils/uploader'
 import { nanoid } from 'nanoid'
+import { storage } from '~/utils/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -216,13 +217,17 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     const originalId = nanoid()
     const wavId = nanoid()
     
-    // 生成文件路径
+    // 获取项目特定的文件路径
+    const paths = storage.getAudioFilePaths(currentProject.value.id, `${originalId}.mp3`)
+    const wavPaths = storage.getAudioFilePaths(currentProject.value.id, `${wavId}.wav`)
+    
+    // 创建音频文件记录
     newAudioFile = {
       id: nanoid(),
       projectId: currentProject.value.id,
       originalName: file.file.name,
-      originalPath: `storage/uploads/${originalId}.mp3`,
-      wavPath: `storage/converted/${wavId}.wav`,
+      originalPath: paths.ORIGINAL,
+      wavPath: wavPaths.CONVERTED,
       duration: 0,
       status: 'uploaded',
       createdAt: new Date(),
@@ -233,9 +238,14 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     await projectStore.addAudioFile(newAudioFile)
     
     // 上传文件
-    await uploader.saveFile(file.file, newAudioFile.originalPath, (progress: number) => {
-      uploadProgress.value = Math.floor(progress * 100 * 10) / 10
-    })
+    await uploader.saveFile(
+      file.file,
+      currentProject.value.id,
+      `${originalId}.mp3`,
+      (progress: number) => {
+        uploadProgress.value = Math.floor(progress * 100 * 10) / 10
+      }
+    )
     
     message.success('文件上传成功')
     isUploading.value = false
@@ -248,47 +258,44 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     // 创建 SSE 连接
     eventSource = new EventSource(`/api/file/convert-progress?fileId=${newAudioFile.id}`)
     eventSource.onmessage = (event) => {
-      const { progress } = JSON.parse(event.data)
-      uploadProgress.value = Math.round(progress * 10) / 10
+      const data = JSON.parse(event.data)
+      uploadProgress.value = data.progress
     }
 
-    // 调用服务器端转码 API
+    // 开始转换
     await $fetch('/api/file/convert', {
       method: 'POST',
       body: {
-        inputPath: newAudioFile.originalPath,
-        outputPath: newAudioFile.wavPath,
+        inputPath: paths.ORIGINAL,
+        outputPath: wavPaths.CONVERTED,
         fileId: newAudioFile.id
       }
     })
-    
-    // 更新音频文件状态
-    await projectStore.updateAudioFile({
-      ...newAudioFile,
-      status: 'ready'
-    })
-    message.success('转码成功')
-  } catch (error) {
-    console.error('Operation failed:', error)
-    message.error(isConverting.value ? '转码失败' : '文件上传失败')
-    
-    // 如果已经创建了音频文件，更新其状态为错误
+
+    // 更新状态
     if (newAudioFile) {
-      await projectStore.updateAudioFile({
-        ...newAudioFile,
-        status: 'error'
-      }).catch(console.error)
+      newAudioFile.status = 'ready'
+      await projectStore.updateAudioFile(newAudioFile)
+    }
+
+    message.success('文件转换完成')
+  } catch (error) {
+    console.error('Error uploading file:', error)
+    message.error('文件处理失败')
+    
+    // 更新状态为错误
+    if (newAudioFile) {
+      newAudioFile.status = 'error'
+      await projectStore.updateAudioFile(newAudioFile)
     }
   } finally {
-    // 清理资源和状态
+    isUploading.value = false
+    isConverting.value = false
+    currentStatus.value = ''
+    uploadProgress.value = 0
     if (eventSource) {
       eventSource.close()
     }
-    // 确保所有状态都被重置
-    isUploading.value = false
-    isConverting.value = false
-    uploadProgress.value = 0
-    currentStatus.value = ''
   }
 }
 
@@ -306,7 +313,11 @@ const handleConfirmDelete = async () => {
 }
 
 const handleEditAnnotations = (file: AudioFile) => {
+  if (!currentProject.value?.id) {
+    message.error('项目不存在')
+    return
+  }
   projectStore.setCurrentAudioFile(file)
-  router.push(`/annotation/${file.id}`)
+  router.push(`/project-annotation/${currentProject.value.id}/${file.id}`)
 }
 </script> 

@@ -1,10 +1,16 @@
 export const uploader = {
-  async saveFile(file: File, path: string, progressCallback?: (progress: number) => void): Promise<void> {
+  async saveFile(
+    file: File,
+    projectId: string,
+    filename: string,
+    progressCallback?: (progress: number) => void
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('path', path)
+      formData.append('projectId', projectId)
+      formData.append('filename', filename)
 
       // 监听上传进度
       xhr.upload.onprogress = (event) => {

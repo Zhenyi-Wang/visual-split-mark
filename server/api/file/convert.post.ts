@@ -11,9 +11,13 @@ function parseTime(timeStr: string): number {
 
 export default defineEventHandler(async (event) => {
   try {
-    const { inputPath, outputPath, fileId } = await readBody(event)
+    const { inputPath, outputPath, fileId } = await readBody<{
+      inputPath: string
+      outputPath: string
+      fileId: string
+    }>(event)
     
-    // 确保输出路径是在 converted 目录下
+    // 确保输入和输出路径是绝对路径
     const absoluteInputPath = join(process.cwd(), inputPath)
     const absoluteOutputPath = join(process.cwd(), outputPath)
     

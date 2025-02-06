@@ -237,6 +237,7 @@ import type { FormInst, FormRules } from 'naive-ui'
 import type { ComponentPublicInstance } from 'vue'
 import type { Annotation, AudioFile } from '~/types/project'
 import type { WhisperResult } from '~/utils/whisper'
+import type { MergeDirection } from '~/types/audio'
 import { storage } from '~/utils/storage'
 import { useAudioVisualizer } from '~/composables/useAudioVisualizer'
 import { useAudioPlayer, type LoadingPhase } from '~/composables/useAudioPlayer'
@@ -303,6 +304,9 @@ const {
   onAddButtonClick,
   onEditButtonClick,
   onDeleteButtonClick,
+  onMergeLeftButtonClick,
+  onMergeRightButtonClick,
+  handleMerge,
   updateDrawing,
   loadingPhase,
   loadingProgress,
@@ -397,18 +401,34 @@ const handleDecreaseRate = () => {
 const setupButtonCallbacks = () => {
   // 设置按钮点击回调
   onAddButtonClick.value = handleAddAnnotation
-  onEditButtonClick.value = (id) => {
+  onEditButtonClick.value = (id: string) => {
     const annotation = annotations.value.find(a => a.id === id)
     if (annotation) {
       handleEditAnnotation(annotation)
     }
   }
-  onDeleteButtonClick.value = (id) => {
+  onDeleteButtonClick.value = (id: string) => {
     const annotation = annotations.value.find(a => a.id === id)
     if (annotation) {
       annotationToDelete.value = annotation
       showDeleteModal.value = true
     }
+  }
+  
+  // 添加合并按钮回调
+  onMergeLeftButtonClick.value = (id: string) => {
+    if (!currentAudioFile.value) {
+      message.error('音频文件不存在')
+      return
+    }
+    handleMerge(id, 'left', currentAudioFile.value.projectId, currentAudioFile.value.id)
+  }
+  onMergeRightButtonClick.value = (id: string) => {
+    if (!currentAudioFile.value) {
+      message.error('音频文件不存在')
+      return
+    }
+    handleMerge(id, 'right', currentAudioFile.value.projectId, currentAudioFile.value.id)
   }
 }
 
@@ -527,73 +547,97 @@ const restoreViewState = async () => {
 }
 
 onMounted(async () => {
-  await projectStore.initialize()
-  const audioFile = projectStore.audioFiles.find(f => f.id === route.params.id)
-  if (!audioFile) {
-    message.error('音频文件不存在')
+  const projectId = route.params.projectId as string
+  const audioId = route.params.audioId as string
+  
+  if (!projectId || !audioId) {
+    message.error('参数错误')
     router.push('/')
     return
   }
-  
-  // 设置当前音频文件
-  projectStore.setCurrentAudioFile(audioFile)
-  
-  // 设置当前项目
-  const project = projectStore.projects.find(p => p.id === audioFile.projectId)
-  if (!project) {
-    message.error('项目不存在')
-    router.push('/')
-    return
-  }
-  projectStore.setCurrentProject(project)
-  
-  // 初始化波形图
-  if (!isInitialized.value && waveformRef.value) {
-    try {
-      
-      // 先设置按钮回调
-      setupButtonCallbacks()
-      
-      await initialize(
-        waveformRef.value, 
-        audioFile,
-        undefined,
-        async (annotation) => {
-          // 更新标注
-          const existingAnnotation = projectStore.annotations.find(a => a.id === annotation.id)
-          await projectStore.updateAnnotation({
-            ...annotation,
-            audioFileId: currentAudioFile.value?.id || '',
-            text: annotation.text || '',
-            whisperText: existingAnnotation?.whisperText || '',
-            createdAt: existingAnnotation?.createdAt || new Date(),
-            updatedAt: new Date()
-          })
-          message.success('标注已更新')
-        }
-      )
-      isInitialized.value = true
 
-      // 加载已有标注
-      annotations.value.forEach(annotation => {
-        addRegion(annotation)
-      })
-
-    } catch (error) {
-      message.error('音频加载失败')
+  try {
+    await projectStore.initialize()
+    await projectStore.loadProject(projectId)
+    
+    const project = projectStore.projects.find(p => p.id === projectId)
+    if (!project) {
+      message.error('项目不存在')
+      router.push('/')
+      return
     }
+    
+    // 设置当前项目
+    projectStore.setCurrentProject(project)
+    
+    // 查找音频文件
+    const audioFile = projectStore.audioFiles.find(f => f.id === audioId)
+    if (!audioFile) {
+      message.error('音频文件不存在')
+      router.push(`/project/${projectId}`)
+      return
+    }
+    
+    // 设置当前音频文件
+    projectStore.setCurrentAudioFile(audioFile)
+    
+    // 初始化波形图
+    if (!isInitialized.value && waveformRef.value) {
+      try {
+        // 先设置按钮回调
+        setupButtonCallbacks()
+        
+        await initialize(
+          waveformRef.value, 
+          audioFile,
+          undefined,
+          async (annotation) => {
+            // 如果是删除操作
+            if ('deleted' in annotation) {
+              await projectStore.deleteAnnotation(annotation.id)
+              return
+            }
+
+            // 更新标注
+            const existingAnnotation = annotations.value.find((a: Annotation) => a.id === annotation.id)
+            await projectStore.updateAnnotation({
+              ...annotation,
+              audioFileId: audioFile.id,
+              text: annotation.text || '',
+              whisperText: existingAnnotation?.whisperText || '',
+              createdAt: existingAnnotation?.createdAt || new Date(),
+              updatedAt: new Date()
+            })
+            message.success('标注已更新')
+          }
+        )
+        isInitialized.value = true
+
+        // 加载已有标注
+        annotations.value.forEach(annotation => {
+          addRegion(annotation)
+        })
+
+      } catch (error) {
+        message.error('音频加载失败')
+      }
+    }
+
+    // 添加一个小延迟确保 DOM 完全加载
+    setTimeout(() => {
+      showIcons.value = true
+    }, 0)
+
+    // 添加键盘事件监听
+    window.addEventListener('keydown', handleKeydown)
+
+    // 手动触发一次 resize 事件以更新布局
+    window.dispatchEvent(new Event('resize'))
+  } catch (error) {
+    console.error('Failed to initialize:', error)
+    message.error('初始化失败')
+    router.push('/')
   }
-
-  // 添加一个小延迟确保 DOM 完全加载
-  setTimeout(() => {
-    showIcons.value = true
-  }, 0)
-
-  // 添加键盘事件监听
-  window.addEventListener('keydown', handleKeydown)
-
-  // 手动触发一次 resize 事件以更新布局
-  window.dispatchEvent(new Event('resize'))
 })
 
 onUnmounted(() => {
@@ -632,11 +676,8 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 const handleBack = () => {
-  if (currentAudioFile.value) {
-    router.push(`/project/${currentAudioFile.value.projectId}`)
-  } else {
-    router.push('/')
-  }
+  const projectId = route.params.id
+  router.push(`/project/${projectId}`)
 }
 
 const handlePlayPause = async () => {
@@ -767,15 +808,6 @@ const handleCloseExport = () => {
   if (status.value === 'completed' || status.value === 'failed') {
     exportPath.value = ''
     exportError.value = ''
-  }
-}
-
-// 添加自动保存函数
-const saveToStorage = async () => {
-  try {
-    await projectStore.saveAll()
-  } catch (error) {
-    message.error('保存失败')
   }
 }
 
