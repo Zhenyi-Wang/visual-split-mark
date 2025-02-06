@@ -157,6 +157,7 @@ import type { AudioFile } from '~/types/project'
 import { uploader } from '~/utils/uploader'
 import { nanoid } from 'nanoid'
 import { storage } from '~/utils/storage'
+import { useHead } from 'unhead'
 
 const route = useRoute()
 const router = useRouter()
@@ -177,6 +178,12 @@ const convertingTimer = ref<NodeJS.Timeout | null>(null)
 
 const currentProject = computed(() => projectStore.currentProject)
 const audioFiles = computed(() => projectStore.projectAudioFiles)
+
+useHead({
+  title: computed(
+    () => `${currentProject.value?.name || '项目详情'} - Visual Split Mark`
+  ).value,
+})
 
 onMounted(async () => {
   await projectStore.initialize()

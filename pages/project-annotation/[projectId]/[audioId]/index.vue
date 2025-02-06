@@ -564,6 +564,7 @@ import { useExport } from '~/composables/useExport'
 import { useViewState } from '~/composables/useViewState'
 import { useDebounceFn } from '@vueuse/core'
 import type { AudioViewState } from '~/composables/useViewState'
+import { useHead } from 'unhead'
 
 // 格式化音频时长（秒数）
 const formatDuration = (seconds: number) => {
@@ -1285,6 +1286,15 @@ const handleSaveNote = async () => {
     message.error('更新备注失败')
   }
 }
+
+useHead({
+  title: computed(
+    () =>
+      `标注 - ${
+        currentAudioFile.value?.originalName || '音频文件'
+      } - Visual Split Mark`
+  ).value,
+})
 </script>
 
 <style scoped>

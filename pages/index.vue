@@ -24,13 +24,24 @@
                 <n-space justify="space-between">
                   <n-text>{{ project.name }}</n-text>
                   <n-space>
-                    <n-button text type="primary" @click="handleEditProject(project)">
+                    <n-button
+                      text
+                      type="primary"
+                      @click="handleEditProject(project)"
+                    >
                       编辑
                     </n-button>
-                    <n-button text type="error" @click="handleDeleteProject(project)">
+                    <n-button
+                      text
+                      type="error"
+                      @click="handleDeleteProject(project)"
+                    >
                       删除
                     </n-button>
-                    <n-button type="primary" @click="navigateToProject(project)">
+                    <n-button
+                      type="primary"
+                      @click="navigateToProject(project)"
+                    >
                       打开
                     </n-button>
                   </n-space>
@@ -48,14 +59,17 @@
       </n-card>
     </n-space>
 
-    <n-modal v-model:show="showCreateModal" preset="dialog" :title="isEditing ? '编辑项目' : '创建项目'">
-      <n-form
-        ref="formRef"
-        :model="formModel"
-        :rules="rules"
-      >
+    <n-modal
+      v-model:show="showCreateModal"
+      preset="dialog"
+      :title="isEditing ? '编辑项目' : '创建项目'"
+    >
+      <n-form ref="formRef" :model="formModel" :rules="rules">
         <n-form-item label="项目名称" path="name">
-          <n-input v-model:value="formModel.name" placeholder="请输入项目名称" />
+          <n-input
+            v-model:value="formModel.name"
+            placeholder="请输入项目名称"
+          />
         </n-form-item>
         <n-form-item label="项目描述" path="description">
           <n-input
@@ -79,8 +93,18 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除项目" negative-text="取消" positive-text="确定" @positive-click="handleConfirmDelete">
-      <n-text>确定要删除项目 "{{ projectToDelete?.name }}" 吗？此操作不可恢复。</n-text>
+    <n-modal
+      v-model:show="showDeleteModal"
+      preset="dialog"
+      title="删除项目"
+      negative-text="取消"
+      positive-text="确定"
+      @positive-click="handleConfirmDelete"
+    >
+      <n-text
+        >确定要删除项目 "{{ projectToDelete?.name }}"
+        吗？此操作不可恢复。</n-text
+      >
     </n-modal>
   </div>
 </template>
@@ -90,6 +114,11 @@ import { format } from 'date-fns'
 import { useMessage } from 'naive-ui'
 import type { FormInst, FormRules } from 'naive-ui'
 import type { Project } from '~/types/project'
+import { useHead } from 'unhead'
+
+useHead({
+  title: '项目列表 - Visual Split Mark',
+})
 
 const projectStore = useProjectStore()
 const message = useMessage()
@@ -104,15 +133,15 @@ const formModel = ref({
   id: '',
   name: '',
   description: '',
-  whisperApiUrl: ''
+  whisperApiUrl: '',
 })
 
 const rules: FormRules = {
   name: {
     required: true,
     message: '请输入项目名称',
-    trigger: 'blur'
-  }
+    trigger: 'blur',
+  },
 }
 
 const projects = computed(() => projectStore.projects)
@@ -131,7 +160,7 @@ const handleEditProject = (project: Project) => {
     id: project.id,
     name: project.name,
     description: project.description || '',
-    whisperApiUrl: project.whisperApiUrl || ''
+    whisperApiUrl: project.whisperApiUrl || '',
   }
   showCreateModal.value = true
 }
@@ -161,12 +190,12 @@ const handleCancel = () => {
     id: '',
     name: '',
     description: '',
-    whisperApiUrl: ''
+    whisperApiUrl: '',
   }
 }
 
 const handleSubmit = () => {
-  formRef.value?.validate(async (errors) => {
+  formRef.value?.validate(async errors => {
     if (!errors) {
       try {
         if (isEditing.value) {
@@ -176,12 +205,12 @@ const handleSubmit = () => {
             description: formModel.value.description,
             whisperApiUrl: formModel.value.whisperApiUrl,
             createdAt: new Date(), // 这个值会被 store 忽略
-            updatedAt: new Date()
+            updatedAt: new Date(),
           })
           message.success('项目已更新')
         } else {
           await projectStore.createProject(
-            formModel.value.name, 
+            formModel.value.name,
             formModel.value.description,
             formModel.value.whisperApiUrl
           )
@@ -194,4 +223,4 @@ const handleSubmit = () => {
     }
   })
 }
-</script> 
+</script>
