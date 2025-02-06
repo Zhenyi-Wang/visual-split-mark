@@ -17,6 +17,7 @@ export interface AudioFile {
   status: 'uploaded' | 'converting' | 'ready' | 'error'
   createdAt: Date
   updatedAt: Date
+  note?: string
 }
 
 export interface Annotation {
@@ -28,4 +29,4 @@ export interface Annotation {
   whisperText?: string
   createdAt: Date
   updatedAt: Date
-} 
+}

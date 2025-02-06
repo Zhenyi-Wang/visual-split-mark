@@ -14,7 +14,13 @@
               @change="handleFileUpload"
             >
               <n-button type="primary" :loading="isUploading || isConverting">
-                {{ isUploading ? '上传中...' : isConverting ? '转换中...' : '上传音频' }}
+                {{
+                  isUploading
+                    ? '上传中...'
+                    : isConverting
+                    ? '转换中...'
+                    : '上传音频'
+                }}
               </n-button>
             </n-upload>
           </n-space>
@@ -31,7 +37,13 @@
               @change="handleFileUpload"
             >
               <n-button type="primary" :loading="isUploading || isConverting">
-                {{ isUploading ? '上传中...' : isConverting ? '转换中...' : '上传音频' }}
+                {{
+                  isUploading
+                    ? '上传中...'
+                    : isConverting
+                    ? '转换中...'
+                    : '上传音频'
+                }}
               </n-button>
             </n-upload>
           </template>
@@ -82,15 +94,21 @@
               </template>
               <template #description>
                 <n-space vertical size="small">
-                  <n-text depth="3">
-                    上传时间: {{ formatDate(file.createdAt) }}
-                  </n-text>
                   <n-text v-if="file.duration" depth="3">
                     时长: {{ formatDuration(file.duration) }}
                   </n-text>
-                  <n-text depth="3">
-                    标注数量: {{ getAnnotationCount(file.id) }}
-                  </n-text>
+                  <n-space align="center">
+                    <n-text depth="3">
+                      标注数量: {{ getAnnotationCount(file.id) }}
+                    </n-text>
+                    <n-text
+                      v-if="file.note"
+                      depth="3"
+                      style="font-size: 13px; margin-left: 12px"
+                    >
+                      备注：{{ file.note }}
+                    </n-text>
+                  </n-space>
                 </n-space>
               </template>
             </n-thing>
@@ -99,8 +117,18 @@
       </n-card>
     </n-space>
 
-    <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除音频文件" negative-text="取消" positive-text="确定" @positive-click="handleConfirmDelete">
-      <n-text>确定要删除音频文件 "{{ fileToDelete?.originalName }}" 吗？此操作不可恢复。</n-text>
+    <n-modal
+      v-model:show="showDeleteModal"
+      preset="dialog"
+      title="删除音频文件"
+      negative-text="取消"
+      positive-text="确定"
+      @positive-click="handleConfirmDelete"
+    >
+      <n-text
+        >确定要删除音频文件 "{{ fileToDelete?.originalName }}"
+        吗？此操作不可恢复。</n-text
+      >
     </n-modal>
   </div>
 </template>
@@ -122,7 +150,8 @@ import {
   NTag,
   NText,
   NThing,
-  NUpload
+  NUpload,
+  NDivider,
 } from 'naive-ui'
 import type { AudioFile } from '~/types/project'
 import { uploader } from '~/utils/uploader'
@@ -204,26 +233,35 @@ const handleBack = () => {
   router.push('/')
 }
 
-const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFileInfo[] }) => {
+const handleFileUpload = async (data: {
+  file: UploadFileInfo
+  fileList: UploadFileInfo[]
+}) => {
   const { file } = data
   if (!file.file || !currentProject.value) return
 
   let eventSource: EventSource | null = null
   let newAudioFile: AudioFile | null = null
-  
+
   try {
     // 开始上传
     isUploading.value = true
     currentStatus.value = '上传文件'
-    
+
     // 生成随机文件名
     const originalId = nanoid()
     const wavId = nanoid()
-    
+
     // 获取项目特定的文件路径
-    const paths = storage.getAudioFilePaths(currentProject.value.id, `${originalId}.mp3`)
-    const wavPaths = storage.getAudioFilePaths(currentProject.value.id, `${wavId}.wav`)
-    
+    const paths = storage.getAudioFilePaths(
+      currentProject.value.id,
+      `${originalId}.mp3`
+    )
+    const wavPaths = storage.getAudioFilePaths(
+      currentProject.value.id,
+      `${wavId}.wav`
+    )
+
     // 创建音频文件记录
     newAudioFile = {
       id: nanoid(),
@@ -234,12 +272,12 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
       duration: 0,
       status: 'uploaded',
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     }
 
     // 保存音频文件信息
     await projectStore.addAudioFile(newAudioFile)
-    
+
     // 上传文件
     await uploader.saveFile(
       file.file,
@@ -249,7 +287,7 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
         uploadProgress.value = Math.floor(progress * 100 * 10) / 10
       }
     )
-    
+
     message.success('文件上传成功')
     isUploading.value = false
 
@@ -259,8 +297,10 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
     uploadProgress.value = 0
 
     // 创建 SSE 连接
-    eventSource = new EventSource(`/api/file/convert-progress?fileId=${newAudioFile.id}`)
-    eventSource.onmessage = (event) => {
+    eventSource = new EventSource(
+      `/api/file/convert-progress?fileId=${newAudioFile.id}`
+    )
+    eventSource.onmessage = event => {
       const data = JSON.parse(event.data)
       uploadProgress.value = data.progress
     }
@@ -271,8 +311,8 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
       body: {
         inputPath: paths.ORIGINAL,
         outputPath: wavPaths.CONVERTED,
-        fileId: newAudioFile.id
-      }
+        fileId: newAudioFile.id,
+      },
     })
 
     // 更新状态
@@ -285,7 +325,7 @@ const handleFileUpload = async (data: { file: UploadFileInfo, fileList: UploadFi
   } catch (error) {
     console.error('Error uploading file:', error)
     message.error('文件处理失败')
-    
+
     // 更新状态为错误
     if (newAudioFile) {
       newAudioFile.status = 'error'
@@ -328,4 +368,4 @@ const handleEditAnnotations = (file: AudioFile) => {
 const getAnnotationCount = (audioFileId: string) => {
   return projectStore.annotations[audioFileId]?.length || 0
 }
-</script> 
+</script>

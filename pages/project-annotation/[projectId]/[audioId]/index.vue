@@ -3,31 +3,41 @@
     <n-space vertical size="large">
       <n-page-header @back="handleBack">
         <template #title>
-          音频标注 - {{ currentAudioFile?.originalName }}
+          <n-space align="center">
+            <span>音频标注 - {{ currentAudioFile?.originalName }}</span>
+            <n-text
+              class="note-text"
+              :depth="3"
+              style="font-size: 13px; cursor: pointer"
+              @click="handleEditNote"
+            >
+              {{ currentAudioFile?.note || '无备注' }}
+            </n-text>
+          </n-space>
         </template>
         <template #extra>
           <n-space>
-            <n-button 
-              type="error" 
-              ghost 
-              @click="handleClearAll" 
+            <n-button
+              type="error"
+              ghost
+              @click="handleClearAll"
               :disabled="!annotations.length"
             >
               清除所有标注
             </n-button>
-            <n-button 
-              type="primary" 
-              ghost 
-              @click="handleTranscribe" 
+            <n-button
+              type="primary"
+              ghost
+              @click="handleTranscribe"
               :loading="transcribing"
               :disabled="!currentProject?.whisperApiUrl"
             >
               识别文本
             </n-button>
-            <n-button 
-              type="primary" 
-              ghost 
-              @click="showExportModal = true" 
+            <n-button
+              type="primary"
+              ghost
+              @click="showExportModal = true"
               :disabled="!annotations.length"
             >
               导出数据集
@@ -49,40 +59,52 @@
                 </client-only>
               </template>
             </n-button>
-            <n-text style="line-height: 34px;">{{ formatDuration(currentTime) }} / {{ formatDuration(duration) }}</n-text>
-            <n-divider vertical style="height: 24px; margin: 5px 0;" />
+            <n-text style="line-height: 34px"
+              >{{ formatDuration(currentTime) }} /
+              {{ formatDuration(duration) }}</n-text
+            >
+            <n-divider vertical style="height: 24px; margin: 5px 0" />
             <n-button-group>
-              <n-button @click="handleDecreaseRate" style="height: 34px;">
+              <n-button @click="handleDecreaseRate" style="height: 34px">
                 <template #icon>
                   <n-icon><icon-remove /></n-icon>
                 </template>
               </n-button>
-              <n-text style="padding: 0 8px; line-height: 34px;">{{ playbackRate }}倍播放</n-text>
-              <n-button @click="handleIncreaseRate" style="height: 34px;">
+              <n-text style="padding: 0 8px; line-height: 34px"
+                >{{ playbackRate }}倍播放</n-text
+              >
+              <n-button @click="handleIncreaseRate" style="height: 34px">
                 <template #icon>
                   <n-icon><icon-add /></n-icon>
                 </template>
               </n-button>
             </n-button-group>
-            <n-divider vertical style="height: 24px; margin: 5px 0;" />
-            <n-text v-if="selectedRegion" style="line-height: 34px;">
-              选中区间：{{ formatDuration(selectedRegion.start) }} - {{ formatDuration(selectedRegion.end) }}
+            <n-divider vertical style="height: 24px; margin: 5px 0" />
+            <n-text v-if="selectedRegion" style="line-height: 34px">
+              选中区间：{{ formatDuration(selectedRegion.start) }} -
+              {{ formatDuration(selectedRegion.end) }}
             </n-text>
-            <n-divider v-if="selectedRegion" vertical style="height: 24px; margin: 5px 0;" />
+            <n-divider
+              v-if="selectedRegion"
+              vertical
+              style="height: 24px; margin: 5px 0"
+            />
             <n-button-group>
-              <n-button @click="handleZoomOut" style="height: 34px;">
+              <n-button @click="handleZoomOut" style="height: 34px">
                 <template #icon>
                   <n-icon><icon-zoom-out /></n-icon>
                 </template>
               </n-button>
-              <n-button @click="handleZoomIn" style="height: 34px;">
+              <n-button @click="handleZoomIn" style="height: 34px">
                 <template #icon>
                   <n-icon><icon-zoom-in /></n-icon>
                 </template>
               </n-button>
             </n-button-group>
-            <n-text style="line-height: 34px;">{{ Math.round(pixelsPerSecond) }}px/s</n-text>
-            <n-divider vertical style="height: 24px; margin: 5px 0;" />
+            <n-text style="line-height: 34px"
+              >{{ Math.round(pixelsPerSecond) }}px/s</n-text
+            >
+            <n-divider vertical style="height: 24px; margin: 5px 0" />
             <n-space align="center">
               <n-text>渲染范围:</n-text>
               <n-input-number
@@ -91,7 +113,7 @@
                 :max="maxStartPercent"
                 :step="1"
                 size="small"
-                style="width: 80px;"
+                style="width: 80px"
               />
               <n-text>% ({{ formatDuration(viewport.startTime) }})</n-text>
               <n-text>-</n-text>
@@ -101,7 +123,7 @@
                 :max="100"
                 :step="1"
                 size="small"
-                style="width: 80px;"
+                style="width: 80px"
               />
               <n-text>% ({{ formatDuration(viewport.endTime) }})</n-text>
             </n-space>
@@ -122,7 +144,7 @@
       :mask-closable="false"
       :closable="false"
       preset="card"
-      style="width: 400px;"
+      style="width: 400px"
       class="loading-modal"
       :title="loadingDescription"
     >
@@ -132,18 +154,29 @@
     </n-modal>
 
     <!-- 添加删除确认对话框 -->
-    <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除标注" type="warning">
+    <n-modal
+      v-model:show="showDeleteModal"
+      preset="dialog"
+      title="删除标注"
+      type="warning"
+    >
       <div>确定要删除这条标注吗？</div>
       <template #action>
         <n-space>
           <n-button @click="showDeleteModal = false">取消</n-button>
-          <n-button type="error" @click="handleConfirmDelete">确定删除</n-button>
+          <n-button type="error" @click="handleConfirmDelete"
+            >确定删除</n-button
+          >
         </n-space>
       </template>
     </n-modal>
 
     <!-- 添加标注文本输入对话框 -->
-    <n-modal v-model:show="showTextInputModal" preset="dialog" :title="pendingAnnotation?.text ? '编辑标注' : '输入标注文本'">
+    <n-modal
+      v-model:show="showTextInputModal"
+      preset="dialog"
+      :title="pendingAnnotation?.text ? '编辑标注' : '输入标注文本'"
+    >
       <n-input
         v-model:value="annotationText"
         type="textarea"
@@ -153,7 +186,9 @@
       <template #action>
         <n-space>
           <n-button @click="showTextInputModal = false">取消</n-button>
-          <n-button type="primary" @click="handleConfirmAnnotation">确定</n-button>
+          <n-button type="primary" @click="handleConfirmAnnotation"
+            >确定</n-button
+          >
         </n-space>
       </template>
     </n-modal>
@@ -163,7 +198,7 @@
       v-model:show="showExportModal"
       preset="card"
       title="导出数据集"
-      style="width: 500px;"
+      style="width: 500px"
       :closable="true"
       :mask-closable="false"
     >
@@ -181,7 +216,7 @@
 
             <template v-if="exportConfig.mergeSentences">
               <n-divider />
-              
+
               <n-form-item label="时长限制">
                 <n-space vertical>
                   <n-space align="center">
@@ -190,7 +225,7 @@
                       :min="1"
                       :max="120"
                       size="small"
-                      style="width: 100px;"
+                      style="width: 100px"
                     />
                     <n-text>秒</n-text>
                   </n-space>
@@ -202,7 +237,9 @@
 
               <n-form-item label="合并方式">
                 <n-space vertical>
-                  <n-radio-group v-model:value="exportConfig.mergeOnlyConsecutive">
+                  <n-radio-group
+                    v-model:value="exportConfig.mergeOnlyConsecutive"
+                  >
                     <n-space vertical>
                       <n-radio :value="false">
                         宽松：合并任意相邻标注（不限间隔）
@@ -213,7 +250,10 @@
                     </n-space>
                   </n-radio-group>
 
-                  <div style="margin-left: 32px" v-if="exportConfig.mergeOnlyConsecutive">
+                  <div
+                    style="margin-left: 32px"
+                    v-if="exportConfig.mergeOnlyConsecutive"
+                  >
                     <n-form-item label="最大间隔">
                       <n-space align="center">
                         <n-input-number
@@ -222,21 +262,28 @@
                           :max="5"
                           :step="0.1"
                           size="small"
-                          style="width: 100px;"
+                          style="width: 100px"
                         />
                         <n-text>秒</n-text>
                       </n-space>
                     </n-form-item>
                   </div>
 
-                  <div style="margin-left: 32px" v-if="!exportConfig.mergeOnlyConsecutive">
+                  <div
+                    style="margin-left: 32px"
+                    v-if="!exportConfig.mergeOnlyConsecutive"
+                  >
                     <n-form-item label="间隔处理">
                       <n-switch v-model:value="exportConfig.keepGaps">
                         <template #checked>保留间隔</template>
                         <template #unchecked>移除间隔</template>
                       </n-switch>
                       <n-text depth="3" style="margin-left: 8px">
-                        {{ exportConfig.keepGaps ? '保留标注之间的空白片段' : '移除标注之间的空白片段' }}
+                        {{
+                          exportConfig.keepGaps
+                            ? '保留标注之间的空白片段'
+                            : '移除标注之间的空白片段'
+                        }}
                       </n-text>
                     </n-form-item>
                   </div>
@@ -246,21 +293,22 @@
 
             <n-divider />
 
-            <n-switch 
-              v-model:value="exportConfig.includeTimestamps"
-            >
+            <n-switch v-model:value="exportConfig.includeTimestamps">
               <template #checked>时间戳训练：开启</template>
               <template #unchecked>时间戳训练：关闭</template>
             </n-switch>
             <n-text depth="3" style="margin-left: 24px">
-              仅在需要训练模型输出时间戳时开启。开启后导出的 JSON 中会添加 sentences 字段，用于训练模型预测每句话的起止时间。
+              仅在需要训练模型输出时间戳时开启。开启后导出的 JSON 中会添加
+              sentences 字段，用于训练模型预测每句话的起止时间。
             </n-text>
           </n-space>
         </n-card>
 
         <n-space justify="end">
           <n-button @click="handleCloseExport">取消</n-button>
-          <n-button type="primary" @click="handleStartExport">开始导出</n-button>
+          <n-button type="primary" @click="handleStartExport"
+            >开始导出</n-button
+          >
         </n-space>
       </n-space>
     </n-modal>
@@ -270,7 +318,7 @@
       v-model:show="showExportProgress"
       preset="card"
       title="导出进度"
-      style="width: 600px;"
+      style="width: 600px"
       :closable="false"
       :mask-closable="false"
     >
@@ -289,9 +337,13 @@
                 {{ exportConfig.maxDuration }} 秒
               </n-descriptions-item>
               <n-descriptions-item label="合并方式">
-                {{ exportConfig.mergeOnlyConsecutive ? 
-                  `严格（间隔 < ${exportConfig.maxGap}秒）` : 
-                  exportConfig.keepGaps ? '宽松（保留间隔）' : '宽松（移除间隔）' }}
+                {{
+                  exportConfig.mergeOnlyConsecutive
+                    ? `严格（间隔 < ${exportConfig.maxGap}秒）`
+                    : exportConfig.keepGaps
+                    ? '宽松（保留间隔）'
+                    : '宽松（移除间隔）'
+                }}
               </n-descriptions-item>
             </template>
           </n-descriptions>
@@ -342,11 +394,17 @@
 
       <template #footer>
         <n-space justify="end">
-          <n-button 
+          <n-button
             @click="handleCloseExportProgress"
             :disabled="status === 'exporting'"
           >
-            {{ status === 'completed' ? '完成' : status === 'failed' ? '关闭' : '取消' }}
+            {{
+              status === 'completed'
+                ? '完成'
+                : status === 'failed'
+                ? '关闭'
+                : '取消'
+            }}
           </n-button>
         </n-space>
       </template>
@@ -357,7 +415,7 @@
       v-model:show="showTranscribeResultModal"
       preset="card"
       title="识别结果"
-      style="width: 500px;"
+      style="width: 500px"
       :closable="true"
       :mask-closable="false"
     >
@@ -365,9 +423,11 @@
         <n-result
           :status="transcribeResult.success ? 'success' : 'error'"
           :title="transcribeResult.success ? '识别成功' : '识别失败'"
-          :description="transcribeResult.success ? 
-            `文本识别完成，共识别出 ${transcribeResult.count} 个片段。\n\n视图更新可能需要一些时间，如果没有看到最新结果，可以手动刷新页面。\n\n请检查识别结果，如有需要可以手动修改。` : 
-            transcribeResult.message"
+          :description="
+            transcribeResult.success
+              ? `文本识别完成，共识别出 ${transcribeResult.count} 个片段。\n\n视图更新可能需要一些时间，如果没有看到最新结果，可以手动刷新页面。\n\n请检查识别结果，如有需要可以手动修改。`
+              : transcribeResult.message
+          "
         />
         <n-space justify="end">
           <n-button @click="() => router.go(0)">刷新页面</n-button>
@@ -391,13 +451,15 @@
         <template v-if="annotations.length > 0">
           <n-alert type="warning" :show-icon="true">
             <template #header>
-              <span style="font-weight: 500">当前音频已有 {{ annotations.length }} 条标注</span>
+              <span style="font-weight: 500"
+                >当前音频已有 {{ annotations.length }} 条标注</span
+              >
             </template>
             新的识别结果将追加到现有标注之后，请谨慎操作。
           </n-alert>
         </template>
         <div>注意：</div>
-        <ul style="margin: 0; padding-left: 20px;">
+        <ul style="margin: 0; padding-left: 20px">
           <li>识别过程可能需要较长时间，请耐心等待</li>
           <li>识别结果可能不够准确，建议在识别后进行人工校正</li>
           <li>如果已有标注，新的识别结果会追加到现有标注之后</li>
@@ -407,16 +469,18 @@
       <template #action>
         <n-space>
           <n-button @click="showTranscribeConfirmModal = false">取消</n-button>
-          <n-button type="warning" @click="handleConfirmTranscribe">开始识别</n-button>
+          <n-button type="warning" @click="handleConfirmTranscribe"
+            >开始识别</n-button
+          >
         </n-space>
       </template>
     </n-modal>
 
     <!-- 添加清除所有标注确认对话框 -->
-    <n-modal 
-      v-model:show="showClearAllModal" 
-      preset="dialog" 
-      title="清除所有标注" 
+    <n-modal
+      v-model:show="showClearAllModal"
+      preset="dialog"
+      title="清除所有标注"
       type="error"
       :show-icon="true"
     >
@@ -425,7 +489,9 @@
           <div>确定要清除当前音频的所有标注吗？</div>
           <n-alert type="error" :show-icon="true">
             <template #header>
-              <span style="font-weight: 500">此操作将删除 {{ annotations.length }} 条标注</span>
+              <span style="font-weight: 500"
+                >此操作将删除 {{ annotations.length }} 条标注</span
+              >
             </template>
             此操作不可恢复，请谨慎操作。
           </n-alert>
@@ -434,15 +500,43 @@
       <template #action>
         <n-space>
           <n-button @click="showClearAllModal = false">取消</n-button>
-          <n-button type="error" @click="handleConfirmClearAll">确定清除</n-button>
+          <n-button type="error" @click="handleConfirmClearAll"
+            >确定清除</n-button
+          >
         </n-space>
       </template>
+    </n-modal>
+
+    <!-- 添加备注编辑对话框 -->
+    <n-modal
+      v-model:show="showNoteModal"
+      preset="dialog"
+      title="编辑备注"
+      positive-text="确定"
+      negative-text="取消"
+      @positive-click="handleSaveNote"
+      @negative-click="() => (showNoteModal = false)"
+    >
+      <n-input
+        v-model:value="noteText"
+        type="textarea"
+        placeholder="请输入备注"
+        :autosize="{ minRows: 3, maxRows: 5 }"
+      />
     </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted, nextTick, unref } from 'vue'
+import {
+  ref,
+  watch,
+  computed,
+  onMounted,
+  onUnmounted,
+  nextTick,
+  unref,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { format } from 'date-fns'
 import { useMessage } from 'naive-ui'
@@ -459,7 +553,7 @@ import {
   AddCircleOutline as IconZoomIn,
   RemoveCircleOutline as IconZoomOut,
   AddOutline as IconAdd,
-  RemoveOutline as IconRemove
+  RemoveOutline as IconRemove,
 } from '@vicons/ionicons5'
 import { WarningOutlined } from '@vicons/antd'
 import { useViewportStore } from '~/stores/viewport'
@@ -495,7 +589,7 @@ const transcribing = ref(false)
 const exporting = ref(false)
 const currentProject = computed(() => projectStore.currentProject)
 
-const { 
+const {
   isPlaying,
   duration,
   currentTime,
@@ -528,7 +622,7 @@ const {
   viewportStartPercent,
   viewportEndPercent,
   maxStartPercent,
-  minEndPercent
+  minEndPercent,
 } = useAudioVisualizer()
 
 const waveformRef = ref<HTMLElement | null>(null)
@@ -552,20 +646,28 @@ const formModel = ref({
   id: '',
   start: 0,
   end: 0,
-  text: ''
+  text: '',
 })
 
 // 添加表单验证规则
 const rules: FormRules = {
-  text: [
-    { required: true, message: '请输入标注文本', trigger: 'blur' }
-  ],
+  text: [{ required: true, message: '请输入标注文本', trigger: 'blur' }],
   start: [
-    { required: true, type: 'number', message: '请输入开始时间', trigger: 'blur' }
+    {
+      required: true,
+      type: 'number',
+      message: '请输入开始时间',
+      trigger: 'blur',
+    },
   ],
   end: [
-    { required: true, type: 'number', message: '请输入结束时间', trigger: 'blur' }
-  ]
+    {
+      required: true,
+      type: 'number',
+      message: '请输入结束时间',
+      trigger: 'blur',
+    },
+  ],
 }
 
 const showIcons = ref(false)
@@ -578,26 +680,26 @@ const loadingDescription = computed(() => {
     idle: '准备加载',
     downloading: '下载中',
     decoding: '解码中',
-    ready: '加载完成'
+    ready: '加载完成',
   }
-  
+
   const phase = loadingPhase.value
   const progress = loadingProgress.value
   const text = phaseText[phase] || '加载中'
-  
+
   if (phase === 'ready') return ''
-  
+
   if (phase === 'downloading' && progress === 0) {
     return text
   }
-  
+
   return `${text} ${progress.toFixed(1)}%`
 })
 
 // 修改加载状态计算属性
 const isLoading = computed({
   get: () => loadingPhase.value !== 'ready',
-  set: () => {} // 模态框不需要双向绑定
+  set: () => {}, // 模态框不需要双向绑定
 })
 
 // 修改倍速控制函数
@@ -628,21 +730,31 @@ const setupButtonCallbacks = () => {
       showDeleteModal.value = true
     }
   }
-  
+
   // 添加合并按钮回调
   onMergeLeftButtonClick.value = (id: string) => {
     if (!currentAudioFile.value) {
       message.error('音频文件不存在')
       return
     }
-    handleMerge(id, 'left', currentAudioFile.value.projectId, currentAudioFile.value.id)
+    handleMerge(
+      id,
+      'left',
+      currentAudioFile.value.projectId,
+      currentAudioFile.value.id
+    )
   }
   onMergeRightButtonClick.value = (id: string) => {
     if (!currentAudioFile.value) {
       message.error('音频文件不存在')
       return
     }
-    handleMerge(id, 'right', currentAudioFile.value.projectId, currentAudioFile.value.id)
+    handleMerge(
+      id,
+      'right',
+      currentAudioFile.value.projectId,
+      currentAudioFile.value.id
+    )
   }
 }
 
@@ -656,9 +768,9 @@ const handleAddAnnotation = () => {
       end: selectedRegion.value.end,
       text: '',
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     }
-    
+
     // 显示文本输入框
     pendingAnnotation.value = annotation
     annotationText.value = ''
@@ -667,7 +779,7 @@ const handleAddAnnotation = () => {
 }
 
 // 监听文本输入框的显示状态
-watch(showTextInputModal, (newValue) => {
+watch(showTextInputModal, newValue => {
   if (!newValue && pendingAnnotation.value) {
     // 如果关闭了文本输入框，且没有输入文本，则删除标注
     if (!annotationText.value) {
@@ -686,16 +798,16 @@ const debouncedUpdateState = useDebounceFn((state: Partial<AudioViewState>) => {
   if (!isInitialized.value) {
     return
   }
-  
+
   // 确保所有必需的字段都存在
   const fullState: AudioViewState = {
     currentTime: state.currentTime ?? currentTime.value,
     scrollPosition: state.scrollPosition ?? 0,
     startTime: state.startTime ?? unref(viewport.startTime),
     endTime: state.endTime ?? unref(viewport.endTime),
-    pixelsPerSecond: state.pixelsPerSecond ?? pixelsPerSecond.value
+    pixelsPerSecond: state.pixelsPerSecond ?? pixelsPerSecond.value,
   }
-  
+
   viewState.updateState(fullState)
 }, 500) // 500ms 的防抖时间
 
@@ -707,20 +819,20 @@ watch(
     toRef(viewport, 'endTime'),
     pixelsPerSecond,
     viewportStartPercent,
-    viewportEndPercent
+    viewportEndPercent,
   ],
-  (newValues) => {
+  newValues => {
     const [
       newCurrentTime,
       newStartTime,
       newEndTime,
       newPixelsPerSecond,
       newStartPercent,
-      newEndPercent
+      newEndPercent,
     ] = newValues
 
     if (!isInitialized.value || !waveformRef.value) return
-    
+
     // 获取滚动容器
     const container = document.querySelector('.waveform-container')
     if (!container) return
@@ -731,11 +843,11 @@ watch(
       scrollPosition: container.scrollLeft,
       startTime: newStartTime,
       endTime: newEndTime,
-      pixelsPerSecond: newPixelsPerSecond
+      pixelsPerSecond: newPixelsPerSecond,
     })
   },
-  { 
-    immediate: false  // 改为 false，等初始化完成后再开始监听
+  {
+    immediate: false, // 改为 false，等初始化完成后再开始监听
   }
 )
 
@@ -744,26 +856,26 @@ const restoreViewState = async () => {
   if (!viewState.viewState.value) return
 
   const state = viewState.viewState.value
-  
+
   // 先设置视口范围和缩放比例
   viewport.setViewport(state.startTime, state.endTime)
   pixelsPerSecond.value = state.pixelsPerSecond
-  
+
   // 等待下一个渲染周期
   await nextTick()
-  
+
   // 恢复播放时间
   seek(state.currentTime)
-  
+
   // 等待波形图重绘完成
   await updateDrawing()
-  
+
   // 最后恢复滚动位置
   const container = document.querySelector('.waveform-container')
   if (container) {
     container.scrollLeft = state.scrollPosition
   }
-  
+
   // 居中到当前播放位置
   await centerViewOnTime(state.currentTime)
 }
@@ -771,7 +883,7 @@ const restoreViewState = async () => {
 onMounted(async () => {
   const projectId = route.params.projectId as string
   const audioId = route.params.audioId as string
-  
+
   if (!projectId || !audioId) {
     message.error('参数错误')
     router.push('/')
@@ -781,17 +893,17 @@ onMounted(async () => {
   try {
     await projectStore.initialize()
     await projectStore.loadProject(projectId)
-    
+
     const project = projectStore.projects.find(p => p.id === projectId)
     if (!project) {
       message.error('项目不存在')
       router.push('/')
       return
     }
-    
+
     // 设置当前项目
     projectStore.setCurrentProject(project)
-    
+
     // 查找音频文件
     const audioFile = projectStore.audioFiles.find(f => f.id === audioId)
     if (!audioFile) {
@@ -799,21 +911,21 @@ onMounted(async () => {
       router.push(`/project/${projectId}`)
       return
     }
-    
+
     // 设置当前音频文件
     projectStore.setCurrentAudioFile(audioFile)
-    
+
     // 初始化波形图
     if (!isInitialized.value && waveformRef.value) {
       try {
         // 先设置按钮回调
         setupButtonCallbacks()
-        
+
         await initialize(
-          waveformRef.value, 
+          waveformRef.value,
           audioFile,
           undefined,
-          async (annotation) => {
+          async annotation => {
             // 如果是删除操作
             if ('deleted' in annotation) {
               await projectStore.deleteAnnotation(annotation.id)
@@ -821,14 +933,16 @@ onMounted(async () => {
             }
 
             // 更新标注
-            const existingAnnotation = annotations.value.find((a: Annotation) => a.id === annotation.id)
+            const existingAnnotation = annotations.value.find(
+              (a: Annotation) => a.id === annotation.id
+            )
             await projectStore.updateAnnotation({
               ...annotation,
               audioFileId: audioFile.id,
               text: annotation.text || '',
               whisperText: existingAnnotation?.whisperText || '',
               createdAt: existingAnnotation?.createdAt || new Date(),
-              updatedAt: new Date()
+              updatedAt: new Date(),
             })
             message.success('标注已更新')
           }
@@ -842,7 +956,6 @@ onMounted(async () => {
 
         // 恢复视口状态
         await restoreViewState()
-
       } catch (error) {
         message.error('音频加载失败')
       }
@@ -869,7 +982,7 @@ onUnmounted(() => {
   destroy()
   // 移除键盘事件监听
   window.removeEventListener('keydown', handleKeydown)
-  
+
   // 保存最终状态
   if (waveformRef.value) {
     const container = waveformRef.value.parentElement?.parentElement
@@ -879,7 +992,7 @@ onUnmounted(() => {
         scrollPosition: container.scrollLeft,
         startTime: unref(viewport.startTime),
         endTime: unref(viewport.endTime),
-        pixelsPerSecond: pixelsPerSecond.value
+        pixelsPerSecond: pixelsPerSecond.value,
       })
     }
   }
@@ -888,11 +1001,13 @@ onUnmounted(() => {
 // 添加键盘事件处理函数
 const handleKeydown = (event: KeyboardEvent) => {
   // 如果当前焦点在输入框中，不处理空格键
-  if (event.target instanceof HTMLInputElement || 
-      event.target instanceof HTMLTextAreaElement) {
+  if (
+    event.target instanceof HTMLInputElement ||
+    event.target instanceof HTMLTextAreaElement
+  ) {
     return
   }
-  
+
   // 处理空格键
   if (event.code === 'Space') {
     event.preventDefault() // 阻止页面滚动
@@ -953,7 +1068,7 @@ const handleSubmit = async () => {
       text: formModel.value.text,
       whisperText: '',
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     }
     await projectStore.updateAnnotation(annotation)
     updateRegion(annotation)
@@ -972,7 +1087,7 @@ const transcribeResult = ref<{
   count?: number
 }>({
   success: false,
-  message: ''
+  message: '',
 })
 
 // 添加识别确认对话框的状态
@@ -997,12 +1112,12 @@ const handleConfirmTranscribe = async () => {
     transcribeResult.value = {
       success: true,
       message: '文本识别完成',
-      count: annotations.length
+      count: annotations.length,
     }
   } catch (error) {
     transcribeResult.value = {
       success: false,
-      message: error instanceof Error ? error.message : '文本识别失败'
+      message: error instanceof Error ? error.message : '文本识别失败',
     }
   } finally {
     transcribing.value = false
@@ -1013,7 +1128,8 @@ const handleConfirmTranscribe = async () => {
 // 导出相关的状态
 const showExportModal = ref(false)
 const showExportProgress = ref(false)
-const { exportAnnotations, progress, status, exportConfig, resetStatus } = useExport()
+const { exportAnnotations, progress, status, exportConfig, resetStatus } =
+  useExport()
 const exportPath = ref('')
 const exportError = ref('')
 
@@ -1060,20 +1176,20 @@ const handleCloseExportProgress = () => {
 // 修改确认标注的处理函数
 const handleConfirmAnnotation = async () => {
   if (!pendingAnnotation.value) return
-  
+
   const annotation: Annotation = {
     ...pendingAnnotation.value,
     text: annotationText.value || '',
     whisperText: pendingAnnotation.value.whisperText || '',
     createdAt: pendingAnnotation.value.createdAt || new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
   }
-  
+
   const isNewAnnotation = !annotations.value.find(a => a.id === annotation.id)
-  
+
   // 更新标注
   await projectStore.updateAnnotation(annotation)
-  
+
   if (isNewAnnotation) {
     // 如果是新建标注
     addRegion(annotation)
@@ -1083,7 +1199,7 @@ const handleConfirmAnnotation = async () => {
     updateRegion(annotation)
     message.success('标注已更新')
   }
-  
+
   showTextInputModal.value = false
   annotationText.value = ''
   pendingAnnotation.value = null
@@ -1098,21 +1214,25 @@ const handleZoomOut = () => {
 }
 
 // 监听标注列表的变化
-watch(() => projectStore.audioFileAnnotations, (newAnnotations) => {
-  // 清除所有标注区域
-  clearRegions()
-  // 重新添加所有标注
-  newAnnotations.forEach(annotation => {
-    addRegion(annotation)
-  })
-}, { deep: true })
+watch(
+  () => projectStore.audioFileAnnotations,
+  newAnnotations => {
+    // 清除所有标注区域
+    clearRegions()
+    // 重新添加所有标注
+    newAnnotations.forEach(annotation => {
+      addRegion(annotation)
+    })
+  },
+  { deep: true }
+)
 
 // 在文件管理器中显示
 const showInFileManager = async (path: string) => {
   try {
     await $fetch('/api/file/show', {
       method: 'POST',
-      body: { path }
+      body: { path },
     })
   } catch (error) {
     message.error('无法打开文件夹')
@@ -1137,6 +1257,32 @@ const handleConfirmClearAll = async () => {
     message.success('所有标注已清除')
   } catch (error) {
     message.error('清除标注失败')
+  }
+}
+
+// 添加备注相关的状态
+const showNoteModal = ref(false)
+const noteText = ref('')
+
+// 添加编辑备注的处理函数
+const handleEditNote = () => {
+  noteText.value = currentAudioFile.value?.note || ''
+  showNoteModal.value = true
+}
+
+const handleSaveNote = async () => {
+  if (!currentAudioFile.value) return
+
+  try {
+    await projectStore.updateAudioFile({
+      ...currentAudioFile.value,
+      note: noteText.value,
+      updatedAt: new Date(),
+    })
+    showNoteModal.value = false
+    message.success('备注已更新')
+  } catch (error) {
+    message.error('更新备注失败')
   }
 }
 </script>
@@ -1231,4 +1377,15 @@ const handleConfirmClearAll = async () => {
 .mt-4 {
   margin-top: 1rem;
 }
-</style> 
+
+.note-text {
+  position: relative;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.note-text:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+</style>
