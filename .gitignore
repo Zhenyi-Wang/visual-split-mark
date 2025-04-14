@@ -25,3 +25,4 @@ logs
 
 # Project specific
 storage/*
+scripts/punctuation/config.py
