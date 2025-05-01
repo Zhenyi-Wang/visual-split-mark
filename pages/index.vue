@@ -3,9 +3,14 @@
     <n-space vertical size="large">
       <n-space justify="space-between">
         <n-h1>项目列表</n-h1>
-        <n-button type="primary" @click="showCreateModal = true">
-          创建项目
-        </n-button>
+        <n-space>
+          <n-button type="primary" @click="navigateToExportManager">
+            导出管理
+          </n-button>
+          <n-button type="primary" @click="showCreateModal = true">
+            创建项目
+          </n-button>
+        </n-space>
       </n-space>
 
       <n-card>
@@ -222,5 +227,9 @@ const handleSubmit = () => {
       }
     }
   })
+}
+
+const navigateToExportManager = () => {
+  navigateTo('/export-manager')
 }
 </script>
