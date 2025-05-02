@@ -5212,6 +5212,11 @@ vueuc@^0.4.63:
     vdirs "^0.1.4"
     vooks "^0.2.4"
 
+wavesurfer.js@^7.9.4:
+  version "7.9.4"
+  resolved "https://registry.npmmirror.com/wavesurfer.js/-/wavesurfer.js-7.9.4.tgz#fab2e52a4bf8e256f6f13dd85cdfed2bc7487d7d"
+  integrity sha512-ahOMvrOKo5jULNnXq8Ske8v/ZStoNNTDjYohvgLNerUFuh+6fJSt7wlxFesEXmnlcTnjMy5/tIzhn9KusjO6bg==
+
 webidl-conversions@^3.0.0:
   version "3.0.1"
   resolved "https://registry.npmmirror.com/webidl-conversions/-/webidl-conversions-3.0.1.tgz"

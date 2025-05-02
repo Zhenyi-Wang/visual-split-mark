@@ -89,6 +89,15 @@
                     >
                       标注
                     </n-button>
+                    <n-button
+                      type="primary"
+                      ghost
+                      @click="handleSwitchToDOM(file)"
+                      :disabled="file.status !== 'ready'"
+                      title="使用DOM渲染优化的标注界面"
+                    >
+                      DOM标注
+                    </n-button>
                   </n-space>
                 </n-space>
               </template>
@@ -369,6 +378,15 @@ const handleEditAnnotations = (file: AudioFile) => {
   }
   projectStore.setCurrentAudioFile(file)
   router.push(`/project-annotation/${currentProject.value.id}/${file.id}`)
+}
+
+const handleSwitchToDOM = (file: AudioFile) => {
+  if (!currentProject.value?.id) {
+    message.error('项目不存在')
+    return
+  }
+  projectStore.setCurrentAudioFile(file)
+  router.push(`/project-dom-annotation/${currentProject.value.id}/${file.id}`)
 }
 
 // 添加获取标注数量的计算函数

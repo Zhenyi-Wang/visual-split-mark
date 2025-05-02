@@ -1,0 +1,197 @@
+## DOM标注界面优化计划
+### 背景和问题
+- 当前项目使用纯Canvas渲染波形图和标注交互元素
+- 路由: `/pages/project-dom-annotation/[projectId]/[audioId]/index.vue`
+- 实际使用中发现Canvas的交互性能很差，渲染也经常出bug
+- 需要提供一个性能更好、交互更流畅的标注界面
+- 项目特点：频繁的交互和音频上渲染标注
+
+### 优化方案：虚拟化DOM + CSS混合渲染
+- 保留Canvas仅用于渲染音频波形数据
+- 使用HTML+CSS渲染标注区域和交互元素
+- 应用虚拟化技术，只渲染视口内的标注项
+- 分离关注点，波形渲染和交互逻辑解耦
+
+### 核心架构设计
+1. **层级结构**
+   - 基础容器层：提供整体布局框架和滚动容器
+   - Canvas波形层：仅负责渲染音频波形数据
+   - DOM交互层：使用HTML元素渲染所有交互元素
+   - 虚拟化标注层：使用虚拟列表技术处理大量标注区域
+   - UI控制层：包含工具栏和控制按钮
+
+2. **核心模块组成**
+   - 音频播放器模块：控制音频播放和时间管理
+   - 波形渲染模块：负责Canvas波形绘制
+   - 标注区域管理模块：处理标注数据和虚拟化渲染
+   - 交互管理模块：处理用户事件和状态变更
+   - 视口控制模块：管理可视区域和缩放
+
+### 实现要点
+1. **波形渲染**
+   - 使用分层Canvas（背景层、波形层）
+   - 仅在视口范围内进行渲染
+   - 采用降采样技术处理大文件
+   - 根据缩放级别动态调整波形精度
+   - 预渲染和缓存常用波形视图
+
+2. **标注区域实现**
+   - 使用绝对定位+transform精确控制标注位置
+   - 为不可见区域使用占位符，保持滚动条正确显示
+   - 监听滚动事件动态计算需要显示的标注项
+   - 基于时间->像素的映射函数计算标注宽度和位置
+
+3. **交互设计**
+   - 使用事件委托处理标注区域事件
+   - 区分点击、双击、拖拽等不同交互意图
+   - 为每个标注区域提供上下文敏感的操作按钮
+   - 支持键盘快捷键操作
+
+4. **性能优化**
+   - 视口外的标注使用虚拟化技术
+   - 缓存计算出的波形数据
+   - 推迟不在视口范围内的计算
+   - 使用IntersectionObserver监测元素可见性
+
+### VueUse优化方案
+VueUse作为Vue Composition API的实用工具集，可以在以下方面优化项目：
+
+### 响应式增强
+- **useElementSize** - 自动跟踪容器尺寸变化，优化波形图响应式调整
+- **useResizeObserver** - 监控DOM元素大小变化，避免手动监听resize事件
+- **useMouseInElement** - 简化鼠标交互逻辑，替代复杂的事件处理
+
+### 性能优化
+- **useRafFn** - 使用requestAnimationFrame优化动画渲染，特别是播放头移动
+- **useTransition** - 平滑处理数值变化，改善播放头移动流畅度
+- **useDebounceFn**/**useThrottleFn** - 控制频繁操作的执行频率（如滚动、缩放）
+
+### 交互增强
+- **useDraggable** - 简化拖拽实现，用于调整标注区域，减少大量自定义拖拽逻辑
+- **useEventListener** - 统一管理事件监听，避免内存泄漏
+- **useSwipe** - 添加触控支持，改善移动设备体验
+
+### 生命周期管理
+- **useTimeoutFn**/**useIntervalFn** - 简化计时器管理
+- **onClickOutside** - 实现点击其他区域关闭编辑框等功能
+
+### Pinia状态管理方案
+创建一个统一的音频标注状态管理，减少组件间通信复杂度：
+
+```typescript
+// 核心状态
+- audioData: 音频数据和元信息
+- annotations: 标注数据集合
+- viewportState: 视图状态(起止时间、缩放比例等)
+- playbackState: 播放状态(位置、是否播放中等)
+- uiState: UI交互状态(选中区域、编辑中标注等)
+
+// 计算属性
+- visibleAnnotations: 当前视口内可见的标注
+- formattedDuration: 格式化的总时长
+- currentTimeFormatted: 格式化的当前时间
+
+// 操作方法
+- 标注管理(添加、编辑、删除、合并标注)
+- 播放控制(播放/暂停、跳转、速率调整)
+- 视图控制(缩放、滚动、定位)
+```
+
+### 新页面开发策略
+- 不修改现有代码，在原有基础上添加新入口
+- 在原有"注释"按钮旁添加一个新入口按钮
+- 开发独立的DOM渲染标注页面
+
+### 新页面文件组织
+1. 路由: `/pages/project-dom-annotation/[projectId]/[audioId]/index.vue`
+2. 核心组件:
+   - `WaveformDOM.vue` - Canvas波形渲染组件
+   - `AnnotationRegions.vue` - DOM标注区域组件
+   - `PlayheadDOM.vue` - 播放指示器组件
+   - `TimelineDOM.vue` - 时间轴组件
+3. 状态: `stores/domAnnotation.ts`
+
+### 添加新入口示例代码
+```vue
+<n-button
+  type="primary"
+  ghost
+  @click="handleSwitchToDOM"
+  title="使用DOM渲染优化的标注界面"
+>
+  DOM标注<icon-new-label />
+</n-button>
+
+<!-- 处理函数 -->
+const handleSwitchToDOM = () => {
+  if (!currentAudioFile.value) return
+  
+  const projectId = currentAudioFile.value.projectId
+  const audioId = currentAudioFile.value.id
+  
+  router.push(`/project-dom-annotation/${projectId}/${audioId}`)
+}
+```
+
+### 阶段1: 基础框架搭建
+- 创建路由 `/pages/project-dom-annotation/[projectId]/[audioId]/index.vue`
+- 搭建页面基本结构(工具栏、波形区、标注区)
+- 实现页面切换逻辑
+- 创建初始Pinia状态管理仓库
+- 预留音频加载接口
+
+### 阶段2: 音频加载与播放
+- 复用现有音频加载逻辑
+- 实现音频控制器(播放/暂停/跳转)
+- 添加播放速率控制
+- 实现时间格式化功能
+- 添加基本时间显示UI
+
+### 阶段3: 波形图Canvas实现
+- 创建WaveformDOM组件
+- 复用现有波形数据解析逻辑
+- 实现基本波形渲染(不含交互)
+- 添加时间轴渲染
+- 优化波形缓存机制
+
+### 阶段4: DOM标注区域基础实现
+- 创建AnnotationRegions组件
+- 实现标注数据加载
+- 开发DOM元素渲染标注区域
+- 添加基本样式和定位
+- 实现标注过滤(只显示视口内标注)
+
+### 阶段5: 播放控制与指示器
+- 创建PlayheadDOM组件
+- 实现播放位置指示器
+- 添加时间点击跳转功能
+- 开发自动滚动跟随功能
+- 优化播放头动画效果
+
+### 阶段6: 交互与编辑功能
+- 添加标注区域选择功能
+- 实现拖拽创建新标注
+- 开发标注编辑对话框
+- 添加标注区域调整大小功能
+- 实现删除标注功能
+
+### 阶段7: 缩放与导航控制
+- 实现缩放控制(鼠标滚轮、按钮)
+- 添加时间范围选择器
+- 开发导航功能(跳到下一个/上一个标注)
+- 实现视图范围调整
+- 优化滚动性能
+
+### 阶段8: 高级标注功能
+- 实现标注合并功能
+- 添加批量操作支持
+- 开发标注搜索功能
+- 实现标注颜色分类
+- 添加标注筛选功能
+
+### 阶段9: VueUse优化集成
+- 集成useElementSize优化响应式
+- 添加useDraggable改进拖拽体验
+- 集成useEventListener统一事件管理
+- 添加useRafFn优化动画
+- 实现useMouseInElement改进交互
