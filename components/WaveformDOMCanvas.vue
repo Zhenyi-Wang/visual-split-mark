@@ -12,22 +12,19 @@ import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useDOMWaveformProcessor } from '~/composables/useDOMWaveformProcessor'
 
-// 波形图采样精度控制常量 - 数值越大，精度越低，渲染越快
-// 有效范围：1-10，1表示最高精度，10表示低精度高速
+// 波形图采样精度控制 - 数值越大，精度越低，渲染越快
 const waveformSamplingFactor = computed(() => {
   const max = 6
   const min = 0.5
-  let factor = Math.log10(domAnnotationStore.viewportState.pixelsPerSecond / 25) * 1.5 //　对数算法
-  // let factor = domAnnotationStore.viewportState.pixelsPerSecond * 4 / 255 + .5 // 线性算法
+  let factor = Math.log10(domAnnotationStore.viewportState.pixelsPerSecond / 25) * 1.5
   if (factor > max) factor = max
   if (factor < min) factor = min
-  console.log('sample', factor)
   return factor
 })
 
+// 波形线宽度控制 - 数值越大，宽度越小
 const waveformLineWidth = computed(() => {
   const factor = Math.max(0.1, Math.log10(domAnnotationStore.viewportState.pixelsPerSecond) / 2)
-  console.log('line', factor)
   return factor
 })
 
@@ -86,12 +83,18 @@ const initCanvas = () => {
   
   // 使用设备像素比例优化清晰度
   const dpr = window.devicePixelRatio || 1
-  canvas.width = container.clientWidth * dpr
-  canvas.height = container.clientHeight * dpr
+  
+  // 直接使用实际容器宽度，确保Canvas大小与容器一致
+  const width = container.clientWidth
+  const height = container.clientHeight
+  
+  // 设置Canvas物理像素尺寸
+  canvas.width = width * dpr
+  canvas.height = height * dpr
   
   // 设置Canvas CSS尺寸
-  canvas.style.width = `${container.clientWidth}px`
-  canvas.style.height = `${container.clientHeight}px`
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
   
   // 获取绘图上下文
   const context = canvas.getContext('2d')
@@ -106,12 +109,14 @@ const initCanvas = () => {
 
 // 绘制波形图
 const drawWaveform = () => {
-  if (!ctx.value || !isInitialized.value) return
+  if (!ctx.value || !isInitialized.value || !containerRef.value) return
+  
+  // 确保使用最新的容器尺寸
+  const container = containerRef.value
+  const width = container.clientWidth
+  const height = container.clientHeight
   
   const context = ctx.value
-  const width = viewportWidth.value
-  const height = viewportHeight.value
-
   
   // 清除Canvas
   context.clearRect(0, 0, width, height)
@@ -208,7 +213,9 @@ const drawWaveform = () => {
   
   // 采用竖线方式绘制波形
   for (let i = 0; i < pixelData.length; i++) {
-    const x = (i / pixelData.length) * width
+    // 修改这里的计算方式，确保波形图水平分布在整个Canvas宽度上
+    // 原来的计算方式可能会导致在窗口变宽时波形不会扩展
+    const x = Math.floor((i * width) / pixelData.length)
     const maxY = center - pixelData[i].max * scaleY
     const minY = center - pixelData[i].min * scaleY
     
@@ -231,7 +238,7 @@ const drawWaveform = () => {
 // 处理窗口大小变化
 const handleResize = () => {
   if (!containerRef.value || !canvasRef.value) return
-  
+
   initCanvas()
   drawWaveform()
 }

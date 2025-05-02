@@ -1,37 +1,14 @@
-# visual-split-mark 项目编码规则
-
 # Visual-Split-Mark 技术架构
 
 本项目是一个音频标注和切分工具，基于以下技术栈构建：
-
-## 前端框架
 - **Nuxt.js 3**: 基于Vue 3的服务端渲染框架
-- **Vue 3**: 使用Composition API和<script setup>语法
 - **TypeScript**: 提供静态类型检查和代码智能提示
 - **Pinia**: Vue 3的状态管理库
 - **VueUse**: Vue Composition API实用工具集
 - **yarn**: 包管理工具
-
-## UI组件
 - **Naive UI**: 主要UI组件库
 - **@icon-park/vue-next** & **@vicons**: 图标库
-
-## 音频处理
-- **WaveSurfer.js**: 用于音频波形可视化
-- **@ffmpeg**: 提供音频转换和处理功能
-
-## 状态管理
-- **Pinia**: Vue 3的状态管理库
-
-## 工具库
-- **VueUse**: Vue Composition API实用工具集
 - **axios**: HTTP客户端
-- **JSZip**: 处理ZIP文件
-
-## 项目架构
-- 基于组件化开发
-- 使用Composables提取可复用逻辑
-- 服务端+客户端渲染结合
 
 ## 文件组织
 - 组件放置在 components/ 目录

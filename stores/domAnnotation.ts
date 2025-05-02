@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useProjectStore } from './project'
 import type { AudioFile, Annotation } from '~/types/project'
+import { ZoomOut } from '@vicons/carbon'
 
 // DOM标注状态接口
 interface DOMAnnotationState {
@@ -89,6 +90,11 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       return projectStore.currentAudioFile
     },
     
+    // 获取当前音频文件的总时长
+    audioDuration(): number {
+      return this.currentAudioFile?.duration || 0
+    },  
+
     // 获取当前音频文件的标注列表
     currentAnnotations(): Annotation[] {
       const projectStore = useProjectStore()
@@ -207,29 +213,105 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     
     // 设置视口范围（开始和结束时间）
     setViewport(startTime: number, endTime: number) {
-      this.viewportState.startTime = startTime
-      this.viewportState.endTime = endTime
+      // this.viewportState.startTime = startTime
+      // this.viewportState.endTime = endTime
       
-      // 根据当前音频文件的总时长更新视口比例
-      const audioDuration = this.currentAudioFile?.duration || 60
-      this.viewportState.viewportRatio.start = startTime / audioDuration
-      this.viewportState.viewportRatio.end = endTime / audioDuration
+      // // 根据当前音频文件的总时长更新视口比例
+      // this.viewportState.viewportRatio.start = startTime / this.audioDuration
+      // this.viewportState.viewportRatio.end = endTime / this.audioDuration
+    },
+
+    moveAndZoomView(newStartTime: number, newEndTime: number) {
+      if (newStartTime < 0 ) {
+        newStartTime = 0
+      } 
+
+      if (newEndTime > this.audioDuration) {
+        newEndTime = this.audioDuration
+      }
+      const viewDuration = newEndTime - newStartTime
+      
+      this.viewportState.startTime = newStartTime
+      this.viewportState.endTime = newEndTime
+      this.viewportState.pixelsPerSecond = this.viewportState.containerWidth / viewDuration
+      this.viewportState.viewportRatio = {
+        start: newStartTime / this.audioDuration,
+        end: newEndTime / this.audioDuration
+      }
     },
     
+    // 移动视口
+    moveView(newStartTime: number) {
+      const viewDuration = this.viewportState.endTime - this.viewportState.startTime
+      let newEndTime = newStartTime + viewDuration
+
+      // 处理边界
+      if (newStartTime < 0) {
+        newStartTime = 0
+        newEndTime = viewDuration
+      } else if (newEndTime > this.audioDuration) {
+        newEndTime = this.audioDuration
+        newStartTime = this.audioDuration - viewDuration
+      }
+
+      // 更新视口状态
+      this.viewportState.startTime = newStartTime
+      this.viewportState.endTime = newEndTime
+    },
+
+    zoomInView(zoomFocusTime: number = -1) {
+      this.zoomView(this.viewportState.pixelsPerSecond * 1.1, zoomFocusTime)
+    },
+
+    zoomOutView(zoomFocusTime: number = -1) {
+      this.zoomView(this.viewportState.pixelsPerSecond * 0.9, zoomFocusTime)
+    },
+
     // 设置缩放级别（每秒像素数）
-    setZoomLevel(pixelsPerSecond: number) {
-      this.viewportState.pixelsPerSecond = pixelsPerSecond
+    zoomView(newPixelsPerSecond: number, zoomFocusTime: number = -1) {
+      if (!this.currentAudioFile?.duration) return
+
+      const MAX_ZOOM = 2000
+      const MIN_ZOOM = 0.01
+
+      // 确保缩放级别在合理范围内
+      newPixelsPerSecond = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newPixelsPerSecond))
+      
+      // 确定缩放中心点
+      if (zoomFocusTime === -1) {
+        // 如果未指定聚焦时间点，则默认聚焦于视口中心
+        zoomFocusTime = (this.viewportState.startTime + this.viewportState.endTime) / 2
+      }
+      
+      // 计算缩放中心点在当前视口中的相对位置 (0-1)
+      let zoomFocusRatio = 0.5
+      const currentViewDuration = this.viewportState.endTime - this.viewportState.startTime
+      
+      if (zoomFocusTime <= this.viewportState.startTime) {
+        zoomFocusRatio = 0
+      } else if (zoomFocusTime >= this.viewportState.endTime) {
+        zoomFocusRatio = 1
+      } else {
+        zoomFocusRatio = (zoomFocusTime - this.viewportState.startTime) / currentViewDuration
+      }
+      
+      // 计算新的视口宽度（时间）
+      const newViewDuration = this.viewportState.containerWidth / newPixelsPerSecond
+      
+      // 根据缩放中心点和新的视口宽度计算新的开始和结束时间
+      let newStartTime = zoomFocusTime - (zoomFocusRatio * newViewDuration)
+      let newEndTime = newStartTime + newViewDuration
+      
+      this.moveAndZoomView(newStartTime, newEndTime)
     },
     
-    // 设置容器宽度
-    setContainerWidth(width: number) {
+    // 改变容器宽度
+    changeContainerWidth(width: number) {
       this.viewportState.containerWidth = width
-    },
-    
-    // 设置视口比例
-    setViewportRatio(start: number, end: number) {
-      this.viewportState.viewportRatio.start = start
-      this.viewportState.viewportRatio.end = end
+      // 重新计算结束时间
+      const viewDurationTime = width / this.viewportState.pixelsPerSecond
+      this.viewportState.endTime = this.viewportState.startTime + viewDurationTime
+      this.viewportState.viewportRatio.end = this.viewportState.endTime / this.audioDuration
     },
     
     // 选择标注

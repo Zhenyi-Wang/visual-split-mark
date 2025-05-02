@@ -156,7 +156,7 @@ const selectedAnnotationId = ref<string | null>(null)
 const updateViewportSize = () => {
   if (scrollContainerRef.value) {
     const width = scrollContainerRef.value.clientWidth
-    domAnnotationStore.setContainerWidth(width)
+    domAnnotationStore.changeContainerWidth(width)
   }
 }
 
@@ -232,7 +232,6 @@ const getAnnotationStyle = (annotation: any) => { // 使用any类型避免类型
   const left = timeToPixel(annotation.start)
   const right = timeToPixel(annotation.end)
   const width = right - left
-  
   return {
     left: `${left}px`,
     width: `${width}px`
@@ -294,13 +293,20 @@ onMounted(async () => {
       console.log('音频时长:', audioBuffer.duration, '秒')
       console.log('采样率:', audioBuffer.sampleRate, 'Hz')
       console.log('声道数:', audioBuffer.numberOfChannels)
-      
-      // 直接使用channelData，无需创建新数组
+
+      // 对比音频时长和项目中的时长
+      if (Math.abs(audioBuffer.duration - audioFile.duration) > 0.1) {
+        console.warn(`实际音频时长${audioBuffer.duration}秒与项目中的时长${audioFile.duration}秒不一致，音频id:${audioFile.id}`)
+        audioFile.duration = audioBuffer.duration
+        console.warn(`更新项目中的音频时长`)
+      }
+
+      // 缓存音频数据
       domAnnotationStore.cacheWaveformData(channelData, audioBuffer.sampleRate, audioBuffer.duration)
       
       // 设置初始视口范围 - 显示前30秒，或整个音频（如果少于30秒）
       const initialDuration = Math.min(30, audioBuffer.duration)
-      domAnnotationStore.setViewport(0, initialDuration)
+      domAnnotationStore.moveAndZoomView(0, initialDuration)
     } catch (error) {
       console.error('音频文件加载失败:', error)
       message.error('音频文件加载失败，请重试')
@@ -441,6 +447,7 @@ useHead({
 }
 
 .annotation-item {
+  box-sizing: border-box;
   position: absolute;
   height: 40px;
   background-color: rgba(64, 158, 255, 0.2);

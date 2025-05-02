@@ -71,21 +71,19 @@ watch(viewportRatio, (newRatio) => {
   previewRatio.value = { ...newRatio }
 }, { immediate: true })
 
-const updateMainViewThrottled = useThrottleFn((calcRatio = true) => {
+// 更新主视图
+const updateMainViewThrottled = useThrottleFn((justMove = false) => {
   setTimeout(() => {
     const duration = audioDuration.value
-    domAnnotationStore.setViewport(
-      previewRatio.value.start * duration,
-      previewRatio.value.end * duration
-    )
 
-    // 计算新的缩放级别
-    if (calcRatio) {
-      const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
-      const containerWidth = domAnnotationStore.viewportState.containerWidth
-      const newPixelsPerSecond = containerWidth / viewDuration
-      domAnnotationStore.setZoomLevel(newPixelsPerSecond)
+    // 如果只是移动，没有缩放
+    if (justMove) {
+      domAnnotationStore.moveView(previewRatio.value.start * duration)
+      return
     }
+
+    // 涉及缩放
+    domAnnotationStore.moveAndZoomView(previewRatio.value.start * duration, previewRatio.value.end * duration)
   }, 0)
 }, 50)
 
@@ -120,7 +118,7 @@ const { isDragging: isLeftDragging } = useDraggable(leftHandleRef, {
       end: previewRatio.value.end
     }
 
-    updateMainViewThrottled()
+    updateMainViewThrottled(false)
   },
   onEnd: () => {
     // // 拖动结束时强制更新一次视口状态
@@ -168,7 +166,7 @@ const { isDragging: isRightDragging } = useDraggable(rightHandleRef, {
     }
 
     // 更新实际视口状态
-    updateMainViewThrottled()
+    updateMainViewThrottled(false)
     // const duration = audioDuration.value
     // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
 
@@ -254,7 +252,7 @@ const { isDragging: isBoxDragging } = useDraggable(selectionBoxRef, {
     }
 
 
-    updateMainViewThrottled(false)
+    updateMainViewThrottled(true)
 
     // const duration = audioDuration.value
     // domAnnotationStore.setViewport(
@@ -263,22 +261,22 @@ const { isDragging: isBoxDragging } = useDraggable(selectionBoxRef, {
     // )
   },
   onEnd: () => {
-    // 拖动结束时更新实际视口状态
-    const duration = audioDuration.value
-    const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
+    // // 拖动结束时更新实际视口状态
+    // const duration = audioDuration.value
+    // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
 
-    // 获取容器宽度
-    const containerWidth = domAnnotationStore.viewportState.containerWidth
+    // // 获取容器宽度
+    // const containerWidth = domAnnotationStore.viewportState.containerWidth
 
-    // 计算新的缩放级别
-    const newPixelsPerSecond = containerWidth / viewDuration
+    // // 计算新的缩放级别
+    // const newPixelsPerSecond = containerWidth / viewDuration
 
-    // 更新视口状态，包括起止时间和缩放级别
-    domAnnotationStore.setViewport(
-      previewRatio.value.start * duration,
-      previewRatio.value.end * duration
-    )
-    domAnnotationStore.setZoomLevel(newPixelsPerSecond)
+    // // 更新视口状态，包括起止时间和缩放级别
+    // domAnnotationStore.setViewport(
+    //   previewRatio.value.start * duration,
+    //   previewRatio.value.end * duration
+    // )
+    // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
   }
 })
 
