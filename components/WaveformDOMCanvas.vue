@@ -1,5 +1,5 @@
 <template>
-  <div ref="containerRef" class="waveform-dom-canvas" @wheel="handleWheel">
+  <div ref="containerRef" class="waveform-dom-canvas" @wheel="handleWheel" @click="handleClick">
     <canvas ref="canvasRef" class="waveform-canvas"></canvas>
     <div v-if="isLoading" class="waveform-loading">
       <div class="loading-text">加载波形图中 ({{ Math.round(loadingProgress) }}%)</div>
@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, defineEmits } from 'vue'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useDOMWaveformProcessor } from '~/composables/useDOMWaveformProcessor'
 
@@ -86,6 +86,18 @@ const handleWheel = (event: WheelEvent) => {
     // 向下滚动 - 缩小
     domAnnotationStore.zoomOutView(timeAtCursor)
   }
+}
+
+// 处理点击事件
+const emit = defineEmits(['waveformClick'])
+const handleClick = (event: MouseEvent) => {
+  if (!containerRef.value) return
+  
+  // 阻止事件冒泡，避免重复处理
+  event.stopPropagation()
+  
+  // 发出点击事件，让父组件处理跳转逻辑
+  emit('waveformClick', event)
 }
 
 // 初始化Canvas

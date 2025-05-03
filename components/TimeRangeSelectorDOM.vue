@@ -14,6 +14,9 @@
         <!-- 右侧调整把手 -->
         <!-- <div ref="rightHandleRef" class="handle handle-right"></div> -->
       </div>
+      
+      <!-- 播放进度线 -->
+      <div v-if="isPlayheadVisible" class="playhead-indicator" :style="{ left: `${playheadPositionPx}px` }"></div>
     </div>
   </div>
 </template>
@@ -170,6 +173,24 @@ const selectionBoxStyleWidthPx = computed(() => {
     return selectionBoxPureWidthPx.value + SELECTION_PADDING_PX * 2
   }
   return selectionBoxPureWidthPx.value
+})
+
+// 计算播放头位置和可见性
+const isPlayheadVisible = computed(() => {
+  const currentTime = domAnnotationStore.playbackState.currentTime
+  return currentTime > 0 && currentTime <= audioDuration.value
+})
+
+const playheadPositionPx = computed(() => {
+  if (!miniWaveformRef.value) return 0
+  const containerWidth = miniWaveformRef.value.clientWidth
+  const currentTime = domAnnotationStore.playbackState.currentTime
+  const duration = audioDuration.value
+  
+  if (duration <= 0) return 0
+  
+  // 计算播放位置对应的像素位置
+  return (currentTime / duration) * containerWidth
 })
 
 // 初始化预览状态
@@ -565,14 +586,6 @@ onUnmounted(() => {
   box-shadow: 1px 0 3px rgba(0, 0, 0, 0.1);
 }
 
-.time-marker {
-  position: absolute;
-  height: 100%;
-  width: 1px;
-  background-color: rgba(0, 0, 0, 0.07);
-  pointer-events: none;
-}
-
 .time-label {
   position: absolute;
   bottom: 4px;
@@ -583,5 +596,15 @@ onUnmounted(() => {
   background-color: rgba(255, 255, 255, 0.7);
   padding: 1px 3px;
   border-radius: 2px;
+}
+
+.playhead-indicator {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background-color: red;
+  pointer-events: none;
+  z-index: 10;
 }
 </style>

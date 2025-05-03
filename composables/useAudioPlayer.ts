@@ -84,8 +84,14 @@ export function useAudioPlayer() {
 
     if (isPlaying.value) {
       audioElement.value.pause()
+      console.log('暂停播放')
     } else {
-      await audioElement.value.play()
+      try {
+        await audioElement.value.play()
+        console.log('开始播放')
+      } catch (error) {
+        console.error('播放失败:', error)
+      }
     }
   }
 
