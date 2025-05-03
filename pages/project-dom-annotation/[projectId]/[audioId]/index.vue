@@ -104,21 +104,7 @@
             </div>
             
             <!-- 标注区 - 固定尺寸 -->
-            <div class="annotation-area">
-              <!-- 根据标注数据渲染标注项 -->
-              <div 
-                v-for="annotation in visibleAnnotations" 
-                :key="annotation.id"
-                class="annotation-item"
-                :class="{ 'annotation-selected': annotation.id === selectedAnnotationId }"
-                :style="getAnnotationStyle(annotation)"
-                @click="handleAnnotationClick(annotation)"
-              >
-                <div class="annotation-content">{{ annotation.text || '(无文本)' }}</div>
-                <div class="annotation-handle annotation-handle-left"></div>
-                <div class="annotation-handle annotation-handle-right"></div>
-              </div>
-            </div>
+            <AnnotationAreaDOM />
           </div>
         </div>
         
@@ -141,7 +127,7 @@ import { useAudioPlayer } from '~/composables/useAudioPlayer'
 import { loadAudioBlobWithProgress } from '~/utils/file'
 import WaveformDOMCanvas from '~/components/WaveformDOMCanvas.vue'
 import TimeRangeSelectorDOM from '~/components/TimeRangeSelectorDOM.vue'
-import ZoomControlDOM from '~/components/ZoomControlDOM.vue'
+import AnnotationAreaDOM from '~/components/AnnotationAreaDOM.vue'
 import {
   Play as IconPlay,
   Pause as IconPause,
@@ -168,15 +154,6 @@ const playbackRate = ref(1.0)
 const isPlaying = ref(false)
 let playheadUpdateTimer: number | null = null
 
-// 获取当前可见的标注列表
-const visibleAnnotations = computed(() => {
-  return domAnnotationStore.visibleAnnotations
-})
-
-// 监听store中的selectedAnnotationId变化，同步到本地状态
-watch(() => domAnnotationStore.uiState.selectedAnnotationId, (newValue) => {
-  selectedAnnotationId.value = newValue
-})
 
 // 页面尺寸监听 - 视口大小变化时更新状态
 const updateViewportSize = () => {
@@ -268,37 +245,6 @@ const formatTimeAxis = (seconds: number) => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
   } else {
     return `${remainingSeconds}s`
-  }
-}
-
-// 获取标注样式
-const getAnnotationStyle = (annotation: any) => { 
-  // 计算标注的位置和宽度
-  const left = timeToPixel(annotation.start)
-  const right = timeToPixel(Math.min(domAnnotationStore.audioDuration, annotation.end))
-  const width = right - left
-  return {
-    left: `${left}px`,
-    width: `${width}px`
-  }
-}
-
-// 处理标注点击
-const handleAnnotationClick = (annotation: any) => { 
-  // 如果点击的是当前选中的标注，则取消选中
-  if (selectedAnnotationId.value === annotation.id) {
-    selectedAnnotationId.value = null
-    domAnnotationStore.selectAnnotation(null)
-  } else {
-    // 否则选中该标注
-    selectedAnnotationId.value = annotation.id
-    domAnnotationStore.selectAnnotation(annotation.id)
-    
-    // 跳转到标注开始位置
-    audioPlayer.seek(annotation.start)
-    
-    // 可以在这里添加其他操作，例如显示标注详情、聚焦到标注等
-    console.log('选中标注:', annotation)
   }
 }
 
@@ -482,8 +428,15 @@ const togglePlay = async () => {
 
 // 处理键盘事件
 const handleKeydown = (event: KeyboardEvent) => {
-  // 空格键控制播放/暂停
+  // 空格键控制播放/暂停，但在编辑标注时不触发
   if (event.code === 'Space' && !event.repeat) {
+    // 检查当前是否处于标注编辑状态
+    const annotationState = domAnnotationStore.uiState.annotationState
+    if (['creating_edit', 'editing_text'].includes(annotationState)) {
+      // 在编辑状态下，不触发播放/暂停
+      return
+    }
+    
     // 阻止默认行为（滚动页面等）
     event.preventDefault()
     togglePlay()
@@ -657,89 +610,6 @@ useHead({
   height: 11px;
   border-radius: 50%;
   background-color: red;
-}
-
-.annotation-area {
-  position: absolute;
-  top: 170px;
-  width: 100%;
-  height: 200px;
-  pointer-events: none;
-}
-
-.annotation-item {
-  box-sizing: border-box;
-  position: absolute;
-  height: 80px;  
-  background-color: rgba(64, 158, 255, 0.2);
-  border: 1px solid #409eff;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  pointer-events: all;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: flex;
-  align-items: start;
-  padding: 6px 6px;
-}
-
-.annotation-item:hover {
-  background-color: rgba(64, 158, 255, 0.3);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.annotation-selected {
-  background-color: rgba(64, 158, 255, 0.4);
-  border: 1px solid #2c8af8;
-  box-shadow: 0 2px 8px rgba(44, 138, 248, 0.4);
-  z-index: 10;
-  height: 82px;  
-  margin-top: -1px;
-}
-
-.annotation-selected .annotation-content {
-  font-weight: bold;
-  color: #1056b7;
-}
-
-.annotation-selected .annotation-handle {
-  background-color: #2c8af8;
-}
-
-.annotation-content {
-  font-size: calc(11px + v-bind('Math.min(1, domAnnotationStore.viewportState.pixelsPerSecond / 50)') * 3px);
-  width: 100%;
-  max-height: 70px;  
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;  
-  line-clamp: 3;  
-  -webkit-box-orient: vertical;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  text-align: left;
-  padding: 4px 0;
-}
-
-.annotation-handle {
-  position: absolute;
-  width: 4px;
-  height: 100%;
-  top: 0;
-  background-color: rgba(64, 158, 255, 0.5);
-  cursor: ew-resize;
-}
-
-.annotation-handle-left {
-  left: 0;
-  border-radius: 4px 0 0 4px;
-}
-
-.annotation-handle-right {
-  right: 0;
-  border-radius: 0 4px 4px 0;
 }
 
 .time-range-selector-container {

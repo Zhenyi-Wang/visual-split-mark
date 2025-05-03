@@ -26,10 +26,10 @@ interface DOMAnnotationState {
   uiState: {
     selectedAnnotationId: string | null
     editingAnnotationId: string | null
-    isDragging: boolean
-    isCreatingAnnotation: boolean
     isResizing: boolean
     resizeDirection: 'left' | 'right' | null
+    // 标注操作状态
+    annotationState: AnnotationState
   }
   // 波形数据缓存
   waveformCache: {
@@ -40,6 +40,14 @@ interface DOMAnnotationState {
   // 错误状态
   error: string | null
 }
+
+// 标注操作状态类型
+export type AnnotationState =
+  | 'idle'             // 空闲状态，无操作
+  | 'creating_drag'    // 创建标注-拖拽阶段
+  | 'creating_edit'    // 创建标注-编辑阶段
+  | 'resizing'         // 调整已有标注大小
+  | 'editing_text'     // 编辑已有标注文本
 
 // DOM标注状态管理
 export const useDOMAnnotationStore = defineStore('domAnnotation', {
@@ -65,10 +73,9 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     uiState: {
       selectedAnnotationId: null,
       editingAnnotationId: null,
-      isDragging: false,
-      isCreatingAnnotation: false,
       isResizing: false,
-      resizeDirection: null
+      resizeDirection: null,
+      annotationState: 'idle'
     },
     // 波形数据缓存
     waveformCache: {
@@ -144,6 +151,18 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       this.clearWaveformCache()
     },
     
+    // 检查时间点是否有标注
+    hasAnnotationAt(time: number): boolean {
+      if (!this.currentAnnotations || this.currentAnnotations.length === 0) {
+        return false
+      }
+      
+      // 检查时间点是否在任何标注范围内
+      return this.currentAnnotations.some(annotation => {
+        return time >= annotation.start && time <= annotation.end
+      })
+    },
+    
     // 重置视图状态
     resetViewport() {
       this.viewportState = {
@@ -172,10 +191,9 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       this.uiState = {
         selectedAnnotationId: null,
         editingAnnotationId: null,
-        isDragging: false,
-        isCreatingAnnotation: false,
         isResizing: false,
-        resizeDirection: null
+        resizeDirection: null,
+        annotationState: 'idle'
       }
     },
     
@@ -213,14 +231,10 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     
     // 设置视口范围（开始和结束时间）
     setViewport(startTime: number, endTime: number) {
-      // this.viewportState.startTime = startTime
-      // this.viewportState.endTime = endTime
-      
-      // // 根据当前音频文件的总时长更新视口比例
-      // this.viewportState.viewportRatio.start = startTime / this.audioDuration
-      // this.viewportState.viewportRatio.end = endTime / this.audioDuration
+      this.moveAndZoomView(startTime, endTime)
     },
 
+    // 根据起止时间移动并缩放视口
     moveAndZoomView(newStartTime: number, newEndTime: number) {
       if (newStartTime < 0 ) {
         newStartTime = 0
@@ -342,21 +356,16 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     setEditingAnnotation(id: string | null) {
       this.uiState.editingAnnotationId = id
     },
-    
-    // 设置拖拽状态
-    setDragging(isDragging: boolean) {
-      this.uiState.isDragging = isDragging
-    },
-    
-    // 设置创建标注状态
-    setCreatingAnnotation(isCreating: boolean) {
-      this.uiState.isCreatingAnnotation = isCreating
-    },
-    
+
     // 设置调整大小状态
     setResizing(isResizing: boolean, direction: 'left' | 'right' | null = null) {
       this.uiState.isResizing = isResizing
       this.uiState.resizeDirection = direction
+    },
+    
+    // 设置标注操作状态
+    setAnnotationState(state: AnnotationState) {
+      this.uiState.annotationState = state
     },
     
     // 时间转像素位置
@@ -369,7 +378,66 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     pixelToTime(pixel: number): number {
       const { startTime, pixelsPerSecond } = this.viewportState
       return startTime + (pixel / pixelsPerSecond)
-    }
+    },
+    
+    // 获取指定时间点之前的最近标注的结束时间
+    getPreviousAnnotationEndTime(time: number): number {
+      if (!this.currentAnnotations || this.currentAnnotations.length === 0) {
+        return 0
+      }
+      
+      // 找到所有结束时间小于指定时间的标注
+      const previousAnnotations = this.currentAnnotations.filter(annotation => annotation.end < time)
+      
+      if (previousAnnotations.length === 0) {
+        return 0
+      }
+      
+      // 返回结束时间最大的那个标注的结束时间
+      return Math.max(...previousAnnotations.map(annotation => annotation.end))
+    },
+    
+    // 获取指定时间点之后的最近标注的开始时间
+    getNextAnnotationStartTime(time: number): number {
+      if (!this.currentAnnotations || this.currentAnnotations.length === 0) {
+        return this.audioDuration
+      }
+      
+      // 找到所有开始时间大于指定时间的标注
+      const nextAnnotations = this.currentAnnotations.filter(annotation => annotation.start > time)
+      
+      if (nextAnnotations.length === 0) {
+        return this.audioDuration
+      }
+      
+      // 返回开始时间最小的那个标注的开始时间
+      return Math.min(...nextAnnotations.map(annotation => annotation.start))
+    },
+    
+    // 创建新标注
+    createAnnotation(annotationData: { start: number; end: number; text: string }) {
+      this.projectStore.createAnnotation(annotationData)
+    },
+    
+    // 更新标注
+    updateAnnotation(id: string, data: { start?: number; end?: number; text?: string }) {
+      console.log('updateAnnotation', id, data)
+      // const projectStore = useProjectStore()
+      // const annotation = this.currentAnnotations.find(a => a.id === id)
+      
+      // if (!annotation) return
+      
+      // // 创建更新后的标注对象
+      // const updatedAnnotation = {
+      //   ...annotation,
+      //   ...(data.start !== undefined && { start: Math.max(0, Math.min(data.start, this.audioDuration)) }),
+      //   ...(data.end !== undefined && { end: Math.max((data.start !== undefined ? data.start : annotation.start) + 0.1, Math.min(data.end, this.audioDuration)) }),
+      //   ...(data.text !== undefined && { text: data.text })
+      // }
+      
+      // // 更新标注
+      // projectStore.updateAnnotation(updatedAnnotation)
+    },
   }
 })
 
