@@ -1,7 +1,7 @@
 <template>
   <div class="time-range-selector">
     <!-- 迷你波形预览和选择器容器 -->
-    <div class="waveform-container" ref="miniWaveformRef" @wheel="handleWheel">
+    <div class="waveform-container" ref="miniWaveformRef" @wheel="handleWheel" @click="handleWaveformClick">
       <!-- 迷你波形 -->
       <canvas ref="miniWaveformCanvas" class="mini-canvas"></canvas>
 
@@ -76,6 +76,44 @@ const handleWheel = (event: WheelEvent) => {
   // 阻止默认行为，避免页面滚动
   event.preventDefault()
 }
+
+// 点击跳转视口
+const handleWaveformClick = (event: PointerEvent) => {
+  if (!miniWaveformRef.value?.getClientRects()) return
+  if (event.target !== miniWaveformCanvas.value) return
+  // console.log(event.target,miniWaveformCanvas.value)
+  event.preventDefault()
+
+  // 当前视口信息
+  const { startTime, endTime } = domAnnotationStore.viewportState
+
+  // 鼠标相对位置和时间
+  const pointerX = event.clientX - miniWaveformRef.value.getClientRects()[0].x
+  const pointerRatio = pointerX / miniWaveformRef.value.clientWidth
+  const pointerTime = pointerRatio * domAnnotationStore.audioDuration
+
+  // 计算新的视口位置
+  const viewDuration = endTime - startTime
+  let newStartTime = pointerTime - viewDuration / 2
+  let newEndTime = pointerTime + viewDuration / 2
+  console.log(111, { startTime, endTime, pointerTime, pointerX, clientX: event.clientX, canvasX: miniWaveformRef.value.getClientRects()[0].x, viewDuration, newStartTime, newEndTime })
+
+  // 边界处理
+  if (newStartTime < 0) {
+    newStartTime = 0
+    newEndTime = viewDuration
+  }
+
+  if (newEndTime > audioDuration.value) {
+    newStartTime = audioDuration.value - viewDuration
+    newEndTime = audioDuration.value
+  }
+
+  console.log(222, { newStartTime, newEndTime })
+
+  domAnnotationStore.moveAndZoomView(newStartTime, newEndTime)
+}
+
 
 // 使用DOM标注状态存储
 const domAnnotationStore = useDOMAnnotationStore()
