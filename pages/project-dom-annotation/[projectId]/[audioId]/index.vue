@@ -70,18 +70,6 @@
         <div class="content-container">
           <!-- 视口容器 - 固定尺寸，不需要滚动 -->
           <div class="viewport-container" ref="scrollContainerRef">
-            <!-- 波形区 - 固定尺寸 -->
-            <div class="waveform-area">
-              <WaveformDOMCanvas v-if="domAnnotationStore.waveformCache.loaded" />
-              <div v-else class="wave-placeholder">
-                <n-spin size="medium" />
-                <div class="loading-info">
-                  <div>{{ loadingStatus }}</div>
-                  <n-progress type="line" :percentage="loadingProgress" :show-indicator="false" />
-                </div>
-              </div>
-            </div>
-            
             <!-- 时间轴 -->
             <div class="timeline">
               <div 
@@ -91,6 +79,18 @@
                 :style="{ left: `${timeToPixel(time)}px` }"
               >
                 <div class="timeline-label">{{ formatTimeAxis(time) }}</div>
+              </div>
+            </div>
+            
+            <!-- 波形区 - 固定尺寸 -->
+            <div class="waveform-area">
+              <WaveformDOMCanvas v-if="domAnnotationStore.waveformCache.loaded" />
+              <div v-else class="wave-placeholder">
+                <n-spin size="medium" />
+                <div class="loading-info">
+                  <div>{{ loadingStatus }}</div>
+                  <n-progress type="line" :percentage="loadingProgress" :show-indicator="false" />
+                </div>
               </div>
             </div>
             
@@ -189,27 +189,51 @@ const visibleAnnotations = computed(() => {
 
 // 生成时间刻度标记
 const timeMarkers = computed(() => {
-  const { startTime, endTime } = domAnnotationStore.viewportState
+  const { startTime, endTime, containerWidth, pixelsPerSecond } = domAnnotationStore.viewportState
   const duration = endTime - startTime
   const markers = []
   
-  // 根据持续时间生成合适的标记间隔
+  // 根据持续时间和像素密度生成合适的标记间隔
   let interval = 5 // 默认5秒一个标记
   
-  if (duration > 300) { // 大于5分钟
+  // 根据像素密度和持续时间动态调整间隔
+  if (pixelsPerSecond < 2) { // 非常低的分辨率
+    interval = 300 // 5分钟一个标记
+  } else if (pixelsPerSecond < 5) { // 低分辨率
+    interval = 120 // 2分钟一个标记
+  } else if (pixelsPerSecond < 10) { // 中低分辨率
     interval = 60 // 1分钟一个标记
-  } else if (duration > 60) { // 大于1分钟
+  } else if (pixelsPerSecond < 20) { // 中等分辨率
+    interval = 30 // 30秒一个标记
+  } else if (pixelsPerSecond < 40) { // 中高分辨率
     interval = 15 // 15秒一个标记
-  } else if (duration > 30) { // 大于30秒
-    interval = 10 // 10秒一个标记
+  } else if (pixelsPerSecond < 80) { // 高分辨率
+    interval = 5 // 5秒一个标记
+  } else if (pixelsPerSecond < 160) { // 超高分辨率
+    interval = 2 // 2秒一个标记
+  } else { // 超高分辨率
+    interval = 1 // 1秒一个标记
   }
   
-  // 计算第一个标记位置
+  // 计算第一个标记位置（确保在视图范围内）
   const firstMarker = Math.ceil(startTime / interval) * interval
   
+  // 计算最后一个标记位置（确保不超出视图范围）
+  const lastMarker = Math.floor(endTime / interval) * interval
+  
   // 生成标记
-  for (let time = firstMarker; time <= endTime; time += interval) {
+  for (let time = firstMarker; time <= lastMarker; time += interval) {
     markers.push(time)
+  }
+  
+  // 如果标记太少，可以添加中间标记
+  if (markers.length < 3 && interval > 1) {
+    const halfInterval = interval / 2
+    for (let time = firstMarker + halfInterval; time < lastMarker; time += interval) {
+      markers.push(time)
+    }
+    // 重新排序
+    markers.sort((a, b) => a - b)
   }
   
   return markers
@@ -407,22 +431,12 @@ useHead({
   height: 100%;
 }
 
-.waveform-area {
+.timeline {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 150px;
-  z-index: 1;
-}
-
-.timeline {
-  position: absolute;
-  top: 150px;
-  left: 0;
-  right: 0;
   height: 20px;
-  border-top: 1px solid #eee;
   border-bottom: 1px solid #eee;
   z-index: 1;
 }
@@ -440,6 +454,26 @@ useHead({
   transform: translateX(-50%);
   font-size: 10px;
   color: #666;
+  white-space: nowrap;
+}
+
+.timeline-marker:first-child .timeline-label {
+  transform: translateX(0);
+  text-align: left;
+}
+
+.timeline-marker:last-child .timeline-label {
+  transform: translateX(-100%);
+  text-align: right;
+}
+
+.waveform-area {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  right: 0;
+  height: 150px;
+  z-index: 1;
 }
 
 .playhead {
