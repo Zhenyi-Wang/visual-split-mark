@@ -414,47 +414,67 @@ const drawMiniWaveform = () => {
 
   // 准备绘制波形
   const data = waveformData
-  const step = Math.max(1, Math.floor(data.length / canvas.width * WAVEFORM_SAMPLING_FACTOR))
+  
+  // 计算每个像素对应的采样点数量
+  const pixelsAvailable = canvas.width
+  const samplesPerPixel = Math.max(1, Math.floor(data.length / pixelsAvailable * WAVEFORM_SAMPLING_FACTOR))
+  
+  // 创建波形渲染数据：计算每个像素位置的峰值
+  const pixelData = []
+  const bucketCount = Math.ceil(data.length / samplesPerPixel)
+  
+  for (let i = 0; i < bucketCount; i++) {
+    const bucketStart = i * samplesPerPixel
+    const bucketEnd = Math.min((i + 1) * samplesPerPixel, data.length)
+    
+    // 查找该区间的最大值和最小值
+    let maxValue = 0
+    let minValue = 0
+    
+    for (let j = bucketStart; j < bucketEnd; j++) {
+      const value = data[j]
+      if (value > maxValue) maxValue = value
+      if (value < minValue) minValue = value
+    }
+    
+    // 保存该区间的波形峰值数据
+    pixelData.push({ max: maxValue, min: minValue })
+  }
 
   // 计算波形缩放比例
   let maxAmplitude = 0
-  for (let i = 0; i < data.length; i += step) {
-    const value = Math.abs(data[i])
-    if (value > maxAmplitude) maxAmplitude = value
+  for (const { max, min } of pixelData) {
+    const maxAbs = Math.max(Math.abs(max), Math.abs(min))
+    if (maxAbs > maxAmplitude) maxAmplitude = maxAbs
   }
 
   const scaleY = maxAmplitude ? (canvas.height * 0.8) / (2 * maxAmplitude) : 1
   const center = canvas.height / 2
 
   // 绘制波形
-  ctx.beginPath()
   ctx.strokeStyle = '#888'
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
   ctx.lineWidth = 1
-
-  // 移动到左下角起点
-  ctx.moveTo(0, center)
-
-  const xIncrement = canvas.width / (data.length / step)
-  // console.log('range selector', 'length', data.length, 'width', canvas.width, 'step', step, 'xIncrement', xIncrement)
-
-  // 绘制上半部分波形
-  let x = 0
-  for (let i = 0; i < data.length; i += step) {
-    if (x >= canvas.width) break
-
-    const value = data[i] * scaleY
-    ctx.lineTo(x, center - value)
-    x += xIncrement
-    // console.log('range selector', 'x', x, 'width', canvas.width, 'value', value)
+  
+  // 采用竖线方式绘制波形
+  for (let i = 0; i < pixelData.length; i++) {
+    // 确保波形图水平分布在整个Canvas宽度上
+    const x = Math.floor((i * canvas.width) / pixelData.length)
+    const maxY = center - pixelData[i].max * scaleY
+    const minY = center - pixelData[i].min * scaleY
+    
+    // 绘制从最大值到最小值的竖线
+    ctx.beginPath()
+    ctx.moveTo(x, maxY)
+    ctx.lineTo(x, minY)
+    ctx.stroke()
   }
-
-  // 绘制中间横线
-  // ctx.lineTo(canvas.width, center)
-  // ctx.lineTo(0, center)
-
-  // 填充波形
-  // ctx.fill()
+  
+  // 绘制零线
+  ctx.beginPath()
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)'
+  ctx.lineWidth = 1
+  ctx.moveTo(0, center)
+  ctx.lineTo(canvas.width, center)
   ctx.stroke()
 }
 
