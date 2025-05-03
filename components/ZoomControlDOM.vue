@@ -36,7 +36,7 @@ const pixelsPerSecond = computed(() => domAnnotationStore.viewportState.pixelsPe
 
 // 格式化缩放级别显示
 const formattedZoomLevel = computed(() => {
-  return `${pixelsPerSecond.value.toFixed(0)}px/秒`
+  return `${pixelsPerSecond.value.toFixed(1)}%`
 })
 
 // 放大
