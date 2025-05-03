@@ -98,31 +98,16 @@ export const useProjectStore = defineStore('project', {
           updatedAt: file.updatedAt ? new Date(file.updatedAt) : new Date(),
         }))
 
-        // 更新标注并确保有效性
+        // 更新标注
         const validatedAnnotations: Record<string, Annotation[]> = {}
         
         for (const audioId in data.annotations) {
           const audioFile = this.audioFiles.find(file => file.id === audioId)
           const audioDuration = audioFile?.duration || 0
           
-          // 验证并修正标注时间范围
-          const validAnnotations = data.annotations[audioId].map((annotation: Annotation) => {
-            const validStart = Math.max(0, Math.min(annotation.start, audioDuration))
-            const validEnd = Math.max(0, Math.min(annotation.end, audioDuration))
-            
-            // 确保 end 始终大于 start
-            const finalEnd = validEnd <= validStart ? Math.min(validStart + 0.1, audioDuration) : validEnd
-            
-            return {
-              ...annotation,
-              start: validStart,
-              end: finalEnd
-            }
-          })
-          
           // 按开始时间排序
-          validAnnotations.sort((a: Annotation, b: Annotation) => a.start - b.start)
-          validatedAnnotations[audioId] = validAnnotations
+          data.annotations[audioId].sort((a: Annotation, b: Annotation) => a.start - b.start)
+          validatedAnnotations[audioId] = data.annotations[audioId]
         }
         
         this.annotations = validatedAnnotations

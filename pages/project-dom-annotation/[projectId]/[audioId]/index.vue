@@ -230,7 +230,7 @@ const formatTimeAxis = (seconds: number) => {
 const getAnnotationStyle = (annotation: any) => { // 使用any类型避免类型错误
   // 计算标注的位置和宽度
   const left = timeToPixel(annotation.start)
-  const right = timeToPixel(annotation.end)
+  const right = timeToPixel(Math.min(domAnnotationStore.audioDuration, annotation.end))
   const width = right - left
   return {
     left: `${left}px`,
@@ -297,9 +297,9 @@ onMounted(async () => {
       // 对比音频时长和项目中的时长
       if (Math.abs(audioBuffer.duration - audioFile.duration) > 0.1) {
         console.warn(`实际音频时长${audioBuffer.duration}秒与项目中的时长${audioFile.duration}秒不一致，音频id:${audioFile.id}`)
-        audioFile.duration = audioBuffer.duration
         console.warn(`更新项目中的音频时长`)
       }
+      audioFile.duration = audioBuffer.duration
 
       // 缓存音频数据
       domAnnotationStore.cacheWaveformData(channelData, audioBuffer.sampleRate, audioBuffer.duration)
