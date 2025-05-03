@@ -1,20 +1,18 @@
 <template>
   <div class="time-range-selector">
     <!-- 迷你波形预览和选择器容器 -->
-    <div class="waveform-container" ref="miniWaveformRef">
+    <div class="waveform-container" ref="miniWaveformRef" @wheel="handleWheel">
       <!-- 迷你波形 -->
       <canvas ref="miniWaveformCanvas" class="mini-canvas"></canvas>
 
       <!-- 选择框 -->
-      <div ref="selectionBoxRef" class="selection-box" :style="{
-        left: `${previewRatio.start * 100}%`,
-        width: `${(previewRatio.end - previewRatio.start) * 100}%`
-      }">
+      <div ref="selectionBoxRef" class="selection-box"
+        :style="{ left: `${selectionBoxStyleLeftPx}px`, width: `${selectionBoxStyleWidthPx}px` }">
         <!-- 左侧调整把手 -->
-        <div ref="leftHandleRef" class="handle handle-left" style="z-index:100;" @click.prevent=""></div>
+        <!-- <div ref="leftHandleRef" class="handle handle-left" style="z-index:100;" @click.prevent=""></div> -->
 
         <!-- 右侧调整把手 -->
-        <div ref="rightHandleRef" class="handle handle-right"></div>
+        <!-- <div ref="rightHandleRef" class="handle handle-right"></div> -->
       </div>
     </div>
   </div>
@@ -37,14 +35,47 @@ const props = defineProps({
 const miniWaveformRef = ref<HTMLDivElement | null>(null)
 const miniWaveformCanvas = ref<HTMLCanvasElement | null>(null)
 const selectionBoxRef = ref<HTMLElement | null>(null)
-const leftHandleRef = ref<HTMLElement | null>(null)
-const rightHandleRef = ref<HTMLElement | null>(null)
+// const leftHandleRef = ref<HTMLElement | null>(null)
+// const rightHandleRef = ref<HTMLElement | null>(null)
 
 // 预览状态 - 拖动过程中只更新这个状态，不触发实际渲染
 const previewRatio = ref({
   start: 0,
   end: 1
 })
+
+// 处理滚轮事件
+const handleWheel = (event: WheelEvent) => {
+  // console.log('TimeRangeSelector wheel event:', {
+  //   deltaX: event.deltaX,
+  //   deltaY: event.deltaY,
+  //   deltaZ: event.deltaZ,
+  //   deltaMode: event.deltaMode,
+  //   clientX: event.clientX,
+  //   clientY: event.clientY,
+  //   offsetX: event.offsetX,
+  //   offsetY: event.offsetY
+  // })
+
+  if (!miniWaveformRef?.value?.clientWidth) return
+
+  // 根据offsetX、容器宽度、视口数据，计算鼠标所在位置的时间
+  const containerWidth = miniWaveformRef.value.clientWidth || 0
+  // 计算相对于波形容器的x坐标
+  const offsetX = event.clientX - miniWaveformRef.value.getBoundingClientRect().left
+  const time = (offsetX / containerWidth) * audioDuration.value
+  // console.log('time args:', { containerWidth, offsetX, time, clientX: event.clientX, left: miniWaveformRef.value.getBoundingClientRect().left })
+
+  // 上移
+  if (event.deltaY < 0) {
+    domAnnotationStore.zoomInView(time)
+  } else if (event.deltaY > 0) {
+    domAnnotationStore.zoomOutView(time)
+  }
+
+  // 阻止默认行为，避免页面滚动
+  event.preventDefault()
+}
 
 // 使用DOM标注状态存储
 const domAnnotationStore = useDOMAnnotationStore()
@@ -64,6 +95,43 @@ const viewportRatio = computed(() => {
     start: Math.max(0, startTime / duration),
     end: Math.min(1, endTime / duration)
   }
+})
+
+const SELECTION_PADDING_PX = 2
+const SELECTION_PADDING_THRESHOLD_PX = 20
+
+const selectionBoxPureLeftPx = computed(() => {
+  if (!miniWaveformRef.value?.clientWidth) return 0
+  const containerWidth = miniWaveformRef.value.clientWidth
+  return containerWidth * viewportRatio.value.start
+})
+
+const selectionBoxPureWidthPx = computed(() => {
+  if (!miniWaveformRef.value?.clientWidth) return 0
+  const containerWidth = miniWaveformRef.value?.clientWidth
+  return containerWidth * (previewRatio.value.end - previewRatio.value.start)
+})
+
+const selectionBoxNeedsPadding = computed(() => {
+  return selectionBoxPureWidthPx.value < SELECTION_PADDING_THRESHOLD_PX
+})
+
+const selectionBoxStyleLeftPx = computed(() => {
+  if (!miniWaveformRef.value?.clientWidth) return 0
+
+  if (selectionBoxNeedsPadding.value) {
+    return selectionBoxPureLeftPx.value - SELECTION_PADDING_PX
+  }
+  return selectionBoxPureLeftPx.value
+})
+
+const selectionBoxStyleWidthPx = computed(() => {
+  if (!miniWaveformRef.value?.clientWidth) return 0
+
+  if (selectionBoxNeedsPadding.value) {
+    return selectionBoxPureWidthPx.value + SELECTION_PADDING_PX * 2
+  }
+  return selectionBoxPureWidthPx.value
 })
 
 // 初始化预览状态
@@ -87,118 +155,118 @@ const updateMainViewThrottled = useThrottleFn((justMove = false) => {
   }, 0)
 }, 50)
 
-// 左侧把手拖动
-const { isDragging: isLeftDragging } = useDraggable(leftHandleRef, {
-  preventDefault: true,
-  initialValue: { x: 0, y: 0 },
-  onStart: () => {
-    previewRatio.value = { ...viewportRatio.value }
-  },
-  onMove: async (position) => {
-    if (!miniWaveformRef) return
+// // 左侧把手拖动
+// const { isDragging: isLeftDragging } = useDraggable(leftHandleRef, {
+//   preventDefault: true,
+//   initialValue: { x: 0, y: 0 },
+//   onStart: () => {
+//     previewRatio.value = { ...viewportRatio.value }
+//   },
+//   onMove: async (position) => {
+//     if (!miniWaveformRef) return
 
-    // 计算容器宽度和位置
-    const containerWidth = miniWaveformRef.value?.clientWidth || 0
-    const containerRect = miniWaveformRef.value?.getBoundingClientRect()
-    if (!containerRect) return
+//     // 计算容器宽度和位置
+//     const containerWidth = miniWaveformRef.value?.clientWidth || 0
+//     const containerRect = miniWaveformRef.value?.getBoundingClientRect()
+//     if (!containerRect) return
 
-    // 计算相对位置和比例
-    const left = position.x - containerRect.left
-    let newStart = Math.max(0, left / containerWidth)
+//     // 计算相对位置和比例
+//     const left = position.x - containerRect.left
+//     let newStart = Math.max(0, left / containerWidth)
 
-    // 确保不超过右侧
-    const minGap = 10 / containerWidth // 最小10像素间隔
-    if (newStart > previewRatio.value.end - minGap) {
-      newStart = previewRatio.value.end - minGap
-    }
+//     // 确保不超过右侧
+//     const minGap = 10 / containerWidth // 最小10像素间隔
+//     if (newStart > previewRatio.value.end - minGap) {
+//       newStart = previewRatio.value.end - minGap
+//     }
 
-    // 更新预览状态
-    previewRatio.value = {
-      start: newStart,
-      end: previewRatio.value.end
-    }
+//     // 更新预览状态
+//     previewRatio.value = {
+//       start: newStart,
+//       end: previewRatio.value.end
+//     }
 
-    updateMainViewThrottled(false)
-  },
-  onEnd: () => {
-    // // 拖动结束时强制更新一次视口状态
-    // const duration = audioDuration.value
-    // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
+//     updateMainViewThrottled(false)
+//   },
+//   onEnd: () => {
+//     // // 拖动结束时强制更新一次视口状态
+//     // const duration = audioDuration.value
+//     // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
 
-    // // 获取容器宽度
-    // const containerWidth = domAnnotationStore.viewportState.containerWidth
+//     // // 获取容器宽度
+//     // const containerWidth = domAnnotationStore.viewportState.containerWidth
 
-    // // 计算新的缩放级别
-    // const newPixelsPerSecond = containerWidth / viewDuration
+//     // // 计算新的缩放级别
+//     // const newPixelsPerSecond = containerWidth / viewDuration
 
-    // // 更新视口状态，包括起止时间和缩放级别
-    // domAnnotationStore.setViewport(
-    //   previewRatio.value.start * duration,
-    //   previewRatio.value.end * duration
-    // )
-    // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
-  }
-})
+//     // // 更新视口状态，包括起止时间和缩放级别
+//     // domAnnotationStore.setViewport(
+//     //   previewRatio.value.start * duration,
+//     //   previewRatio.value.end * duration
+//     // )
+//     // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
+//   }
+// })
 
-// 右侧把手拖动
-const { isDragging: isRightDragging } = useDraggable(rightHandleRef, {
-  preventDefault: true,
-  onStart: () => {
-    previewRatio.value = { ...viewportRatio.value }
-  },
-  onMove: (position, event) => {
-    if (!miniWaveformRef.value) return
+// // 右侧把手拖动
+// const { isDragging: isRightDragging } = useDraggable(rightHandleRef, {
+//   preventDefault: true,
+//   onStart: () => {
+//     previewRatio.value = { ...viewportRatio.value }
+//   },
+//   onMove: (position, event) => {
+//     if (!miniWaveformRef.value) return
 
-    const containerWidth = miniWaveformRef.value.clientWidth
-    const deltaX = position.x - miniWaveformRef.value.getBoundingClientRect().x
+//     const containerWidth = miniWaveformRef.value.clientWidth
+//     const deltaX = position.x - miniWaveformRef.value.getBoundingClientRect().x
 
-    // 转换新的结束位置
-    let newEnd = deltaX / containerWidth
+//     // 转换新的结束位置
+//     let newEnd = deltaX / containerWidth
 
-    // 边界检查
-    if (newEnd > 1) newEnd = 1
-    if (newEnd < previewRatio.value.start + 0.01) newEnd = previewRatio.value.start + 0.01
+//     // 边界检查
+//     if (newEnd > 1) newEnd = 1
+//     if (newEnd < previewRatio.value.start + 0.01) newEnd = previewRatio.value.start + 0.01
 
-    // 更新预览状态
-    previewRatio.value = {
-      start: previewRatio.value.start,
-      end: newEnd
-    }
+//     // 更新预览状态
+//     previewRatio.value = {
+//       start: previewRatio.value.start,
+//       end: newEnd
+//     }
 
-    // 更新实际视口状态
-    updateMainViewThrottled(false)
-    // const duration = audioDuration.value
-    // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
+//     // 更新实际视口状态
+//     updateMainViewThrottled(false)
+//     // const duration = audioDuration.value
+//     // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
 
-    // // 计算新的缩放级别
-    // const newPixelsPerSecond = containerWidth / viewDuration
+//     // // 计算新的缩放级别
+//     // const newPixelsPerSecond = containerWidth / viewDuration
 
-    // // 更新视口状态，包括起止时间和缩放级别
-    // domAnnotationStore.setViewport(
-    //   previewRatio.value.start * duration,
-    //   previewRatio.value.end * duration
-    // )
-    // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
-  },
-  onEnd: () => {
-    // // 拖动结束时更新实际视口状态
-    // const duration = audioDuration.value
-    // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
+//     // // 更新视口状态，包括起止时间和缩放级别
+//     // domAnnotationStore.setViewport(
+//     //   previewRatio.value.start * duration,
+//     //   previewRatio.value.end * duration
+//     // )
+//     // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
+//   },
+//   onEnd: () => {
+//     // // 拖动结束时更新实际视口状态
+//     // const duration = audioDuration.value
+//     // const viewDuration = (previewRatio.value.end - previewRatio.value.start) * duration
 
-    // // 获取容器宽度
-    // const containerWidth = domAnnotationStore.viewportState.containerWidth
+//     // // 获取容器宽度
+//     // const containerWidth = domAnnotationStore.viewportState.containerWidth
 
-    // // 计算新的缩放级别
-    // const newPixelsPerSecond = containerWidth / viewDuration
+//     // // 计算新的缩放级别
+//     // const newPixelsPerSecond = containerWidth / viewDuration
 
-    // // 更新视口状态，包括起止时间和缩放级别
-    // domAnnotationStore.setViewport(
-    //   previewRatio.value.start * duration,
-    //   previewRatio.value.end * duration
-    // )
-    // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
-  }
-})
+//     // // 更新视口状态，包括起止时间和缩放级别
+//     // domAnnotationStore.setViewport(
+//     //   previewRatio.value.start * duration,
+//     //   previewRatio.value.end * duration
+//     // )
+//     // domAnnotationStore.setZoomLevel(newPixelsPerSecond)
+//   }
+// })
 
 let boxDrag = {
   isFirst: true,
@@ -215,8 +283,8 @@ const { isDragging: isBoxDragging } = useDraggable(selectionBoxRef, {
   onMove: (position, event) => {
     if (!miniWaveformRef.value) return
 
-    // 防止事件冒泡
-    if (isLeftDragging.value || isRightDragging.value) return
+    // // 防止事件冒泡
+    // if (isLeftDragging.value || isRightDragging.value) return
 
     // 初次移动时记录x坐标
     if (boxDrag.isFirst) {
@@ -410,10 +478,11 @@ onUnmounted(() => {
   position: absolute;
   top: 0;
   height: 100%;
+  padding: v-bind("selectionBoxNeedsPadding ? '0 ' + SELECTION_PADDING_PX + 'px' : 0");
   background-color: rgba(167, 167, 167, 0.15);
   border: 1px solid rgba(65, 65, 65, 0.5);
-  border-left: none;
-  border-right: none;
+  /* border-left: none;
+  border-right: none; */
   cursor: move;
   border-radius: 2px;
 }

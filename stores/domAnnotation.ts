@@ -269,6 +269,7 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
 
     // 设置缩放级别（每秒像素数）
     zoomView(newPixelsPerSecond: number, zoomFocusTime: number = -1) {
+      console.log('zoomView init:', { newPixelsPerSecond, zoomFocusTime, ...this.viewportState })
       if (!this.currentAudioFile?.duration) return
 
       const MAX_ZOOM = 2000
@@ -288,10 +289,29 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       const currentViewDuration = this.viewportState.endTime - this.viewportState.startTime
       
       if (zoomFocusTime <= this.viewportState.startTime) {
-        zoomFocusRatio = 0
+        // 超出左边界
+        if(this.viewportState.endTime === this.audioDuration) {
+          // 视角已到尽头
+          zoomFocusTime = this.viewportState.endTime
+          zoomFocusRatio = 1
+        } else {
+          // 视角未到尽头
+          zoomFocusTime = this.viewportState.startTime
+          zoomFocusRatio = 0
+        }
       } else if (zoomFocusTime >= this.viewportState.endTime) {
-        zoomFocusRatio = 1
+        // 超出右边界
+        if(this.viewportState.startTime === 0) {
+          // 视角已到尽头
+          zoomFocusTime = this.viewportState.startTime
+          zoomFocusRatio = 0
+        } else {
+          // 视角未到尽头
+          zoomFocusTime = this.viewportState.endTime
+          zoomFocusRatio = 1
+        }
       } else {
+        // 处理中间
         zoomFocusRatio = (zoomFocusTime - this.viewportState.startTime) / currentViewDuration
       }
       
@@ -302,6 +322,8 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       let newStartTime = zoomFocusTime - (zoomFocusRatio * newViewDuration)
       let newEndTime = newStartTime + newViewDuration
       
+      console.log('zoomView args:', { newStartTime, newEndTime, zoomFocusTime, zoomFocusRatio, newViewDuration, currentViewDuration })
+
       this.moveAndZoomView(newStartTime, newEndTime)
     },
     
