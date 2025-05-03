@@ -69,7 +69,7 @@
         <!-- 内容容器 -->
         <div class="content-container">
           <!-- 视口容器 - 固定尺寸，不需要滚动 -->
-          <div class="viewport-container" ref="scrollContainerRef" @click="handleWaveformClick">
+          <div class="viewport-container" ref="scrollContainerRef">
             <!-- 时间轴 -->
             <div class="timeline">
               <div 
@@ -168,6 +168,16 @@ const playbackRate = ref(1.0)
 const isPlaying = ref(false)
 let playheadUpdateTimer: number | null = null
 
+// 获取当前可见的标注列表
+const visibleAnnotations = computed(() => {
+  return domAnnotationStore.visibleAnnotations
+})
+
+// 监听store中的selectedAnnotationId变化，同步到本地状态
+watch(() => domAnnotationStore.uiState.selectedAnnotationId, (newValue) => {
+  selectedAnnotationId.value = newValue
+})
+
 // 页面尺寸监听 - 视口大小变化时更新状态
 const updateViewportSize = () => {
   if (scrollContainerRef.value) {
@@ -189,11 +199,6 @@ watch(scrollContainerRef, () => {
 // 计算属性
 const currentProject = computed(() => projectStore.currentProject)
 const currentAudioFile = computed(() => projectStore.currentAudioFile)
-
-// 计算可见标注
-const visibleAnnotations = computed(() => {
-  return domAnnotationStore.visibleAnnotations
-})
 
 // 生成时间刻度标记
 const timeMarkers = computed(() => {
@@ -249,9 +254,9 @@ const timeMarkers = computed(() => {
 
 // 将时间转换为像素位置
 const timeToPixel = (time: number) => {
-  const { startTime, endTime, containerWidth } = domAnnotationStore.viewportState
+  const { startTime, endTime } = domAnnotationStore.viewportState
   const viewDuration = endTime - startTime
-  return ((time - startTime) / viewDuration) * containerWidth
+  return ((time - startTime) / viewDuration) * domAnnotationStore.viewportState.containerWidth
 }
 
 // 格式化时间轴刻度显示
@@ -280,8 +285,21 @@ const getAnnotationStyle = (annotation: any) => {
 
 // 处理标注点击
 const handleAnnotationClick = (annotation: any) => { 
-  selectedAnnotationId.value = annotation.id
-  domAnnotationStore.selectAnnotation(annotation.id)
+  // 如果点击的是当前选中的标注，则取消选中
+  if (selectedAnnotationId.value === annotation.id) {
+    selectedAnnotationId.value = null
+    domAnnotationStore.selectAnnotation(null)
+  } else {
+    // 否则选中该标注
+    selectedAnnotationId.value = annotation.id
+    domAnnotationStore.selectAnnotation(annotation.id)
+    
+    // 跳转到标注开始位置
+    audioPlayer.seek(annotation.start)
+    
+    // 可以在这里添加其他操作，例如显示标注详情、聚焦到标注等
+    console.log('选中标注:', annotation)
+  }
 }
 
 // 计算播放头可见性
@@ -652,37 +670,57 @@ useHead({
 .annotation-item {
   box-sizing: border-box;
   position: absolute;
-  height: 40px;
+  height: 80px;  
   background-color: rgba(64, 158, 255, 0.2);
   border: 1px solid #409eff;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
   pointer-events: all;
   overflow: hidden;
   text-overflow: ellipsis;
   display: flex;
-  align-items: center;
-  padding: 0 6px;
+  align-items: start;
+  padding: 6px 6px;
 }
 
 .annotation-item:hover {
   background-color: rgba(64, 158, 255, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .annotation-selected {
   background-color: rgba(64, 158, 255, 0.4);
-  border: 2px solid #2c8af8;
-  z-index: 2;
+  border: 1px solid #2c8af8;
+  box-shadow: 0 2px 8px rgba(44, 138, 248, 0.4);
+  z-index: 10;
+  height: 82px;  
+  margin-top: -1px;
+}
+
+.annotation-selected .annotation-content {
+  font-weight: bold;
+  color: #1056b7;
+}
+
+.annotation-selected .annotation-handle {
+  background-color: #2c8af8;
 }
 
 .annotation-content {
   font-size: calc(11px + v-bind('Math.min(1, domAnnotationStore.viewportState.pixelsPerSecond / 50)') * 3px);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   width: 100%;
-  text-align: center;
+  max-height: 70px;  
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;  
+  line-clamp: 3;  
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  text-align: left;
+  padding: 4px 0;
 }
 
 .annotation-handle {
