@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, defineEmits } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useDOMWaveformProcessor } from '~/composables/useDOMWaveformProcessor'
 
@@ -220,16 +220,9 @@ const drawWaveform = () => {
     // 保存该区间的波形峰值数据
     pixelData.push({ max: maxValue, min: minValue })
   }
-  
-  // 计算波形缩放比例（让波形高度在容器的70%范围内）
-  let maxAmplitude = 0
-  for (const { max, min } of pixelData) {
-    const maxAbs = Math.max(Math.abs(max), Math.abs(min))
-    if (maxAbs > maxAmplitude) maxAmplitude = maxAbs
-  }
-  
-  const scaleY = maxAmplitude ? (height * 0.7) / (2 * maxAmplitude) : 1
-  
+  // 波形数据整体范围为 -1 到 1，控制渲染高度在容器的 80% 范围内
+  const scaleY = height / 2 * 0.8
+
   // 绘制波形
   context.beginPath()
   context.strokeStyle = props.waveColor
@@ -348,7 +341,6 @@ defineExpose({
   background-color: rgba(245, 245, 245, 0.7);
   z-index: 2;
 }
-
 .loading-text {
   font-size: 14px;
   color: #666;
