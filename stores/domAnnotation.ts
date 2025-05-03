@@ -269,7 +269,6 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
 
     // 设置缩放级别（每秒像素数）
     zoomView(newPixelsPerSecond: number, zoomFocusTime: number = -1) {
-      console.log('zoomView init:', { newPixelsPerSecond, zoomFocusTime, ...this.viewportState })
       if (!this.currentAudioFile?.duration) return
 
       const MAX_ZOOM = 2000
@@ -322,8 +321,6 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       let newStartTime = zoomFocusTime - (zoomFocusRatio * newViewDuration)
       let newEndTime = newStartTime + newViewDuration
       
-      console.log('zoomView args:', { newStartTime, newEndTime, zoomFocusTime, zoomFocusRatio, newViewDuration, currentViewDuration })
-
       this.moveAndZoomView(newStartTime, newEndTime)
     },
     

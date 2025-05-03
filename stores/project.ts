@@ -98,8 +98,34 @@ export const useProjectStore = defineStore('project', {
           updatedAt: file.updatedAt ? new Date(file.updatedAt) : new Date(),
         }))
 
-        // 更新标注
-        this.annotations = data.annotations
+        // 更新标注并确保有效性
+        const validatedAnnotations: Record<string, Annotation[]> = {}
+        
+        for (const audioId in data.annotations) {
+          const audioFile = this.audioFiles.find(file => file.id === audioId)
+          const audioDuration = audioFile?.duration || 0
+          
+          // 验证并修正标注时间范围
+          const validAnnotations = data.annotations[audioId].map((annotation: Annotation) => {
+            const validStart = Math.max(0, Math.min(annotation.start, audioDuration))
+            const validEnd = Math.max(0, Math.min(annotation.end, audioDuration))
+            
+            // 确保 end 始终大于 start
+            const finalEnd = validEnd <= validStart ? Math.min(validStart + 0.1, audioDuration) : validEnd
+            
+            return {
+              ...annotation,
+              start: validStart,
+              end: finalEnd
+            }
+          })
+          
+          // 按开始时间排序
+          validAnnotations.sort((a: Annotation, b: Annotation) => a.start - b.start)
+          validatedAnnotations[audioId] = validAnnotations
+        }
+        
+        this.annotations = validatedAnnotations
       } catch (error) {
         console.error('Failed to load project:', error)
         this.error = error instanceof Error ? error.message : String(error)
@@ -109,7 +135,7 @@ export const useProjectStore = defineStore('project', {
       }
     },
 
-    setCurrentProject(project: Project | null) {
+    async setCurrentProject(project: Project | null) {
       this.currentProject = project
       if (project) {
         this.loadProject(project.id)
@@ -120,7 +146,7 @@ export const useProjectStore = defineStore('project', {
       }
     },
 
-    setCurrentAudioFile(audioFile: AudioFile | null) {
+    async setCurrentAudioFile(audioFile: AudioFile | null) {
       this.currentAudioFile = audioFile
     },
 
@@ -301,19 +327,35 @@ export const useProjectStore = defineStore('project', {
           this.annotations[this.currentAudioFile.id] = []
         }
 
+        // 确保标注时间不超出音频时长
+        const audioDuration = this.currentAudioFile.duration || 0
+        const validAnnotation = {
+          ...annotation,
+          start: Math.max(0, Math.min(annotation.start, audioDuration)),
+          end: Math.max(0, Math.min(annotation.end, audioDuration))
+        }
+
+        // 确保 end 始终大于 start
+        if (validAnnotation.end <= validAnnotation.start) {
+          validAnnotation.end = Math.min(validAnnotation.start + 0.1, audioDuration)
+        }
+
         // 更新或添加标注
         const annotations = this.annotations[this.currentAudioFile.id]
         const index = annotations.findIndex(
-          (a: Annotation) => a.id === annotation.id
+          (a: Annotation) => a.id === validAnnotation.id
         )
         if (index > -1) {
-          annotations[index] = annotation
+          annotations[index] = validAnnotation
         } else {
           annotations.push({
-            ...annotation,
+            ...validAnnotation,
             id: crypto.randomUUID(),
           })
         }
+
+        // 按开始时间排序标注
+        annotations.sort((a, b) => a.start - b.start)
 
         // 保存标注
         await storage.saveAnnotations(
@@ -323,6 +365,51 @@ export const useProjectStore = defineStore('project', {
         )
       } catch (error) {
         console.error('Failed to update annotation:', error)
+        this.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async updateAnnotations(annotations: Annotation[]) {
+      if (!this.currentProject || !this.currentAudioFile) {
+        throw new Error('No project or audio file selected')
+      }
+
+      this.loading = true
+      this.error = null
+      try {
+        // 确保标注时间不超出音频时长
+        const audioDuration = this.currentAudioFile.duration || 0
+        const validAnnotations = annotations.map(annotation => {
+          const validStart = Math.max(0, Math.min(annotation.start, audioDuration))
+          const validEnd = Math.max(0, Math.min(annotation.end, audioDuration))
+          
+          // 确保 end 始终大于 start
+          const finalEnd = validEnd <= validStart ? Math.min(validStart + 0.1, audioDuration) : validEnd
+          
+          return {
+            ...annotation,
+            start: validStart,
+            end: finalEnd
+          }
+        })
+
+        // 按开始时间排序标注
+        validAnnotations.sort((a, b) => a.start - b.start)
+
+        // 更新标注
+        this.annotations[this.currentAudioFile.id] = validAnnotations
+
+        // 保存更改
+        await storage.saveAnnotations(
+          this.currentProject.id,
+          this.currentAudioFile.id,
+          validAnnotations
+        )
+      } catch (error) {
+        console.error('Failed to update annotations:', error)
         this.error = error instanceof Error ? error.message : String(error)
         throw error
       } finally {
@@ -360,33 +447,6 @@ export const useProjectStore = defineStore('project', {
       }
     },
 
-    async updateAnnotations(annotations: Annotation[]) {
-      if (!this.currentProject || !this.currentAudioFile) {
-        throw new Error('No project or audio file selected')
-      }
-
-      this.loading = true
-      this.error = null
-      try {
-        // 更新标注
-        this.annotations[this.currentAudioFile.id] = annotations
-
-        // 保存更改
-        await storage.saveAnnotations(
-          this.currentProject.id,
-          this.currentAudioFile.id,
-          annotations
-        )
-      } catch (error) {
-        console.error('Failed to update annotations:', error)
-        this.error = error instanceof Error ? error.message : String(error)
-        throw error
-      } finally {
-        this.loading = false
-      }
-    },
-
-    // 清除当前音频文件的所有标注
     async clearAllAnnotations() {
       if (!this.currentProject || !this.currentAudioFile) {
         throw new Error('No project or audio file selected')
