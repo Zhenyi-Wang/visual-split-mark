@@ -1,5 +1,5 @@
 <template>
-  <div ref="containerRef" class="waveform-dom-canvas">
+  <div ref="containerRef" class="waveform-dom-canvas" @wheel="handleWheel">
     <canvas ref="canvasRef" class="waveform-canvas"></canvas>
     <div v-if="isLoading" class="waveform-loading">
       <div class="loading-text">加载波形图中 ({{ Math.round(loadingProgress) }}%)</div>
@@ -61,17 +61,32 @@ const domAnnotationStore = useDOMAnnotationStore()
 // 使用波形处理工具
 const waveformProcessor = useDOMWaveformProcessor()
 
-// 计算当前视口宽度
-const viewportWidth = computed(() => {
-  if (!containerRef.value) return props.width
-  return containerRef.value.clientWidth
-})
+// 处理滚轮事件
+const handleWheel = (event: WheelEvent) => {
+  // 阻止默认行为，避免页面滚动
+  event.preventDefault()
 
-// 计算当前视口高度
-const viewportHeight = computed(() => {
-  if (!containerRef.value) return props.height
-  return containerRef.value.clientHeight
-})
+  if (!containerRef.value) return
+
+  // 计算鼠标所在位置的时间点
+  const containerRect = containerRef.value.getBoundingClientRect()
+  const offsetX = event.clientX - containerRect.left
+  const containerWidth = containerRef.value.clientWidth
+  
+  // 计算鼠标位置对应的时间点
+  const { startTime, endTime } = domAnnotationStore.viewportState
+  const secondsInView = endTime - startTime
+  const timeAtCursor = startTime + (offsetX / containerWidth) * secondsInView
+
+  // 根据滚轮方向进行缩放
+  if (event.deltaY < 0) {
+    // 向上滚动 - 放大
+    domAnnotationStore.zoomInView(timeAtCursor)
+  } else if (event.deltaY > 0) {
+    // 向下滚动 - 缩小
+    domAnnotationStore.zoomOutView(timeAtCursor)
+  }
+}
 
 // 初始化Canvas
 const initCanvas = () => {
