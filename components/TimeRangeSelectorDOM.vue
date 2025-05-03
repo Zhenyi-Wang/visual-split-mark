@@ -81,7 +81,7 @@ const handleWheel = (event: WheelEvent) => {
 }
 
 // 点击跳转视口
-const handleWaveformClick = (event: PointerEvent) => {
+const handleWaveformClick = (event: MouseEvent) => {
   if (!miniWaveformRef.value?.getClientRects()) return
   if (event.target !== miniWaveformCanvas.value) return
   // console.log(event.target,miniWaveformCanvas.value)
