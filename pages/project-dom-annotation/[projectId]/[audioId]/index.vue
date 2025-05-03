@@ -73,7 +73,13 @@
             <!-- 波形区 - 固定尺寸 -->
             <div class="waveform-area">
               <WaveformDOMCanvas v-if="domAnnotationStore.waveformCache.loaded" />
-              <div v-else class="wave-placeholder">波形区 - 正在加载音频数据</div>
+              <div v-else class="wave-placeholder">
+                <n-spin size="medium" />
+                <div class="loading-info">
+                  <div>{{ loadingStatus }}</div>
+                  <n-progress type="line" :percentage="loadingProgress" :show-indicator="false" />
+                </div>
+              </div>
             </div>
             
             <!-- 时间轴 -->
@@ -151,6 +157,8 @@ const domAnnotationStore = useDOMAnnotationStore()
 // 引用和状态变量
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const selectedAnnotationId = ref<string | null>(null)
+const loadingProgress = ref(0)
+const loadingStatus = ref('正在初始化...')
 
 // 页面尺寸监听 - 视口大小变化时更新状态
 const updateViewportSize = () => {
@@ -227,7 +235,7 @@ const formatTimeAxis = (seconds: number) => {
 }
 
 // 获取标注样式
-const getAnnotationStyle = (annotation: any) => { // 使用any类型避免类型错误
+const getAnnotationStyle = (annotation: any) => { 
   // 计算标注的位置和宽度
   const left = timeToPixel(annotation.start)
   const right = timeToPixel(Math.min(domAnnotationStore.audioDuration, annotation.end))
@@ -239,7 +247,7 @@ const getAnnotationStyle = (annotation: any) => { // 使用any类型避免类型
 }
 
 // 处理标注点击
-const handleAnnotationClick = (annotation: any) => { // 使用any类型避免类型错误
+const handleAnnotationClick = (annotation: any) => { 
   selectedAnnotationId.value = annotation.id
   domAnnotationStore.selectAnnotation(annotation.id)
 }
@@ -248,8 +256,14 @@ const handleAnnotationClick = (annotation: any) => { // 使用any类型避免类
 onMounted(async () => {
   console.log('开始加载DOM标注页面数据')
   
+  // 清空音频和标注的缓存
+  domAnnotationStore.initialize()
+  console.log('已清空音频和标注缓存')
+  
   try {
     // 初始化项目数据
+    loadingStatus.value = '正在加载项目数据...'
+    loadingProgress.value = 10
     await projectStore.initialize()
     console.log('项目列表初始化完成')
     
@@ -257,17 +271,19 @@ onMounted(async () => {
     const projectId = route.params.projectId as string
     const audioId = route.params.audioId as string
     
-    // 加载项目详情
+    loadingStatus.value = '正在加载项目详情...'
+    loadingProgress.value = 20
     await projectStore.loadProject(projectId)
-    console.log('项目详细数据加载完成')
     
-    // 设置当前音频文件
-    const audioFile = projectStore.projectAudioFiles.find(f => f.id === audioId)
+    // 获取音频文件
+    const audioFile = projectStore.audioFiles.find(f => f.id === audioId)
     if (!audioFile) {
-      throw new Error('找不到音频文件')
+      throw new Error('未找到音频文件')
     }
     
     // 设置当前音频文件
+    loadingStatus.value = '正在加载标注数据...'
+    loadingProgress.value = 30
     projectStore.setCurrentAudioFile(audioFile)
     
     // 初始化视口尺寸
@@ -276,51 +292,68 @@ onMounted(async () => {
     
     // 加载音频文件
     try {
+      loadingStatus.value = '正在加载音频文件...'
+      loadingProgress.value = 40
       console.log('开始加载音频文件:', audioFile.wavPath)
       // 使用文件工具加载音频文件blob和音频数据
       const { blob, audioBuffer } = await loadAudioBlobWithProgress(
         audioFile.wavPath,
-        (phase, progress) => {
-          console.log(`音频加载阶段: ${phase}, 进度: ${progress}%`)
+        (phase: 'download' | 'decode', progress: number) => {
+          // 更新加载进度 (40-80%)
+          loadingStatus.value = phase === 'download' ? 
+            `正在下载音频文件...${Math.round(progress)}%` : 
+            `正在解码音频数据...${Math.round(progress)}%`
+          
+          // 下载阶段占总进度的40%，解码阶段占40%
+          const progressValue = phase === 'download' ? 
+            40 + progress * 0.4 : // 40-80%
+            80 + progress * 0.1   // 80-90%
+          
+          loadingProgress.value = progressValue
         }
       )
       
-      // 从AudioBuffer中获取音频数据数组
+      // 获取第一个声道数据
       const channelData = audioBuffer.getChannelData(0)
       
-      // 打印音频基本信息
-      console.log('音频文件加载完成')
-      console.log('音频时长:', audioBuffer.duration, '秒')
-      console.log('采样率:', audioBuffer.sampleRate, 'Hz')
-      console.log('声道数:', audioBuffer.numberOfChannels)
-
-      // 对比音频时长和项目中的时长
-      if (Math.abs(audioBuffer.duration - audioFile.duration) > 0.1) {
+      // 更新音频文件时长（如果与实际不符）
+      loadingStatus.value = '正在处理波形数据...'
+      loadingProgress.value = 85
+      if (audioFile.duration !== audioBuffer.duration) {
         console.warn(`实际音频时长${audioBuffer.duration}秒与项目中的时长${audioFile.duration}秒不一致，音频id:${audioFile.id}`)
+
         console.warn(`更新项目中的音频时长`)
       }
       audioFile.duration = audioBuffer.duration
 
       // 缓存音频数据
+      loadingStatus.value = '正在生成波形图...'
+      loadingProgress.value = 90
       domAnnotationStore.cacheWaveformData(channelData, audioBuffer.sampleRate, audioBuffer.duration)
       
       // 设置初始视口范围 - 显示前30秒，或整个音频（如果少于30秒）
+      loadingStatus.value = '加载完成'
+      loadingProgress.value = 100
       const initialDuration = Math.min(30, audioBuffer.duration)
       domAnnotationStore.moveAndZoomView(0, initialDuration)
     } catch (error) {
       console.error('音频文件加载失败:', error)
       message.error('音频文件加载失败，请重试')
+      loadingStatus.value = '音频文件加载失败'
     }
 
   } catch (error) {
     console.error('DOM标注页面加载失败:', error)
     message.error('加载失败，请重试')
+    loadingStatus.value = '加载失败'
   }
 })
 
-// 组件卸载时清理事件监听
+// 组件卸载时清理事件监听和缓存
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  // 清空缓存，避免内存泄漏
+  domAnnotationStore.clearWaveformCache()
 })
 
 // 返回按钮处理
@@ -505,5 +538,18 @@ useHead({
   padding: 0;
   background-color: #fff;
   border-radius: 4px;
+}
+
+.wave-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.loading-info {
+  margin-top: 16px;
+  text-align: center;
 }
 </style>
