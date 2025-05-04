@@ -477,7 +477,8 @@ onUnmounted(() => {
 
 .annotation-add-button {
   position: absolute;
-  top: 0;
+  top: 80px;
+  /* transform: translateX(-50%); */
   height: 20px;
   padding: 0 8px;
   border-radius: 4px;

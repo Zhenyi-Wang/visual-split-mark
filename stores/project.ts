@@ -320,9 +320,14 @@ export const useProjectStore = defineStore('project', {
           end: Math.max(0, Math.min(annotation.end, audioDuration))
         }
 
-        // 确保 end 始终大于 start
-        if (validAnnotation.end <= validAnnotation.start) {
-          validAnnotation.end = Math.min(validAnnotation.start + 0.1, audioDuration)
+        if (validAnnotation.end < validAnnotation.start) {
+          // 确保 end 始终大于 start，否则交换
+          let temp = validAnnotation.start
+          validAnnotation.start = validAnnotation.end
+          validAnnotation.end = temp
+        } else if (validAnnotation.end === validAnnotation.start) {
+          // 如果相等，则增加 0.1 秒
+          validAnnotation.end = validAnnotation.start + 0.1
         }
 
         // 更新或添加标注
