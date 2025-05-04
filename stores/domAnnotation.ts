@@ -419,24 +419,33 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       this.projectStore.createAnnotation(annotationData)
     },
     
+    // 删除标注
+    deleteAnnotation(id: string) {
+      this.projectStore.deleteAnnotation(id)
+    },
+    
     // 更新标注
     updateAnnotation(id: string, data: { start?: number; end?: number; text?: string }) {
       console.log('updateAnnotation', id, data)
-      // const projectStore = useProjectStore()
-      // const annotation = this.currentAnnotations.find(a => a.id === id)
       
-      // if (!annotation) return
+      // 查找现有标注
+      const annotation = this.currentAnnotations.find(a => a.id === id)
       
-      // // 创建更新后的标注对象
-      // const updatedAnnotation = {
-      //   ...annotation,
-      //   ...(data.start !== undefined && { start: Math.max(0, Math.min(data.start, this.audioDuration)) }),
-      //   ...(data.end !== undefined && { end: Math.max((data.start !== undefined ? data.start : annotation.start) + 0.1, Math.min(data.end, this.audioDuration)) }),
-      //   ...(data.text !== undefined && { text: data.text })
-      // }
+      if (!annotation) {
+        console.warn('找不到要更新的标注:', id)
+        return
+      }
       
-      // // 更新标注
-      // projectStore.updateAnnotation(updatedAnnotation)
+      // 创建更新后的标注对象
+      const updatedAnnotation = {
+        ...annotation,
+        ...(data.start !== undefined && { start: Math.max(0, Math.min(data.start, this.audioDuration)) }),
+        ...(data.end !== undefined && { end: Math.max((data.start !== undefined ? data.start : annotation.start) + 0.1, Math.min(data.end, this.audioDuration)) }),
+        ...(data.text !== undefined && { text: data.text })
+      }
+      
+      // 调用项目store的方法更新标注
+      this.projectStore.updateAnnotation(updatedAnnotation)
     },
   }
 })
