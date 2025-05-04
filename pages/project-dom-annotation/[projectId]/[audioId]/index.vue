@@ -104,7 +104,7 @@
             </div>
             
             <!-- 标注区 - 固定尺寸 -->
-            <AnnotationAreaDOM />
+            <AnnotationAreaDOM :audio-player="audioPlayer" />
           </div>
         </div>
         

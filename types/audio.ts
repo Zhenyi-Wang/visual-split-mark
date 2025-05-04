@@ -52,6 +52,7 @@ export interface AudioPlayer {
   duration: Ref<number>
   currentTime: Ref<number>
   playbackRate: Ref<number>
+  seek: (time: number) => void
 }
 
 // 波形绘制器接口

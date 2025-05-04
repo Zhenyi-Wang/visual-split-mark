@@ -49,9 +49,14 @@ import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { NIcon, NButton } from 'naive-ui'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useProjectStore } from '~/stores/project'
-import { useAudioPlayer } from '~/composables/useAudioPlayer'
 import { Add as IconAdd } from '@icon-park/vue-next'
 import { useMouseInElement, watchThrottled, useMousePressed, useDebounceFn, useEventListener } from '@vueuse/core'
+import type { AudioPlayer } from '~/types/audio'
+
+// 定义组件属性
+const props = defineProps<{
+  audioPlayer: AudioPlayer
+}>()
 
 // Store
 const domAnnotationStore = useDOMAnnotationStore()
@@ -62,7 +67,6 @@ const viewStartTime = computed(() => domAnnotationStore.viewportState.startTime)
 const viewEndTime = computed(() => domAnnotationStore.viewportState.endTime)
 
 // 获取音频播放器实例
-const audioPlayer = useAudioPlayer()
 const currentPlayTime = computed(() => domAnnotationStore.playbackState.currentTime)
 
 // 组件引用
@@ -199,7 +203,7 @@ const handleAnnotationClick = (annotation: any) => {
   } else {
     // 选中新的标注并跳转到对应时间点
     domAnnotationStore.selectAnnotation(annotation.id)
-    audioPlayer.seek(annotation.start)
+    props.audioPlayer.seek(annotation.start)
   }
 }
 
