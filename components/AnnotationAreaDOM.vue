@@ -50,7 +50,7 @@ import { NIcon, NButton } from 'naive-ui'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useProjectStore } from '~/stores/project'
 import { Add as IconAdd } from '@icon-park/vue-next'
-import { useMouseInElement, watchThrottled, useMousePressed, useDebounceFn, useEventListener } from '@vueuse/core'
+import { useMouseInElement, watchThrottled, useMousePressed, useDebounceFn, useEventListener, useElementSize, useElementBounding } from '@vueuse/core'
 import type { AudioPlayer } from '~/types/audio'
 
 // 定义组件属性
@@ -72,6 +72,12 @@ const currentPlayTime = computed(() => domAnnotationStore.playbackState.currentT
 // 组件引用
 const annotationAreaRef = ref<HTMLDivElement | null>(null)
 const newAnnotationInputRef = ref<HTMLInputElement | null>(null)
+
+// 使用 useElementSize 监听容器尺寸
+const { width: containerWidth } = useElementSize(annotationAreaRef)
+
+// 使用 useElementBounding 获取容器位置
+const { left: containerX } = useElementBounding(annotationAreaRef)
 
 // 状态机状态 - 使用 store 中的状态
 const annotationState = computed(() => domAnnotationStore.uiState.annotationState)
@@ -135,20 +141,9 @@ const visibleAnnotations = computed(() => {
   return domAnnotationStore.visibleAnnotations
 })
 
-// 获取容器宽度
-const containerWidth = computed(() => {
-  if (!annotationAreaRef.value) return 0
-  return annotationAreaRef.value.clientWidth
-})
-
-// 获取容器距离窗口左边的像素位置
-const containerX = computed(() => {
-  if (!annotationAreaRef.value) return 0
-  return annotationAreaRef.value.getBoundingClientRect().left
-})
-
 // 将时间转换为像素位置
 const timeToPixel = (time: number) => {
+  console.log('timeToPixel', {time, viewStartTime: viewStartTime.value, viewEndTime: viewEndTime.value, containerWidth: containerWidth.value})
   const viewDuration = viewEndTime.value - viewStartTime.value
   return ((time - viewStartTime.value) / viewDuration) * containerWidth.value
 }
