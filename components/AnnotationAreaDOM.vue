@@ -1082,7 +1082,7 @@ const updateResizing = () => {
       // 单独拖动左边界
 
       // 获取相邻标注的边界限制
-      const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(selectedOrHoveredAnnotation.value.start as any)
+      const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(selectedOrHoveredAnnotation.value.start + 0.01 as any)
 
       // 左极限: 最大值(视口左边界, 前一个标注的结束时间)
       // 右极限: 最小值(视口右边界, 自身结束时间-0.1)
@@ -1106,7 +1106,7 @@ const updateResizing = () => {
       previewAnnotation.end = newEnd
     } else {
       // 单独拖动右边界
-      const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(selectedOrHoveredAnnotation.value.end)
+      const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(selectedOrHoveredAnnotation.value.end - 0.01)
       // 左极限: 最大值(视口左边界, 自身开始时间+0.1)
       // 右极限: 最小值(视口右边界, 下一个标注的开始时间)
       const minTime = Math.max(viewStartTime.value, previewAnnotation.start + 0.1)
