@@ -27,7 +27,7 @@
       </n-page-header>
 
       <!-- 主要内容区域 -->
-      <div class="main-content">
+      <div class="main-content" :class="{ 'no-select': domAnnotationStore.uiState.annotationState !== 'idle' }">
         <!-- 工具栏 -->
         <div class="toolbar">
           <n-space align="center">
@@ -992,5 +992,9 @@ useHead({
 .loading-info {
   margin-top: 16px;
   text-align: center;
+}
+
+.no-select {
+  user-select: none
 }
 </style>
