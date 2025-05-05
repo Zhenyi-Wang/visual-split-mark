@@ -33,31 +33,9 @@
               <Edit />
             </n-icon>
           </button>
-          <button class="annotation-btn delete-btn" @click.stop="handleDeleteClick(annotation)" title="删除">
+          <button class="annotation-btn more-btn" @click.stop="showAnnotationMenu(annotation, $event)" title="更多操作">
             <n-icon size="16">
-              <Delete />
-            </n-icon>
-          </button>
-        </div>
-
-        <div class="annotation-buttons-row">
-          <button class="annotation-btn merge-btn" @click.stop="handleMergeLeft(annotation)"
-            :disabled="!hasPreviousAnnotation(annotation)" :class="{ 'btn-disabled': !hasPreviousAnnotation(annotation) }"
-            title="合并到左边">
-            <n-icon size="16">
-              <MergeCells />
-            </n-icon>
-          </button>
-          <button class="annotation-btn merge-btn" @click.stop="handleMergeRight(annotation)"
-            :disabled="!hasNextAnnotation(annotation)" :class="{ 'btn-disabled': !hasNextAnnotation(annotation) }"
-            title="合并到右边">
-            <n-icon size="16">
-              <MergeCells style="transform: rotate(180deg)" />
-            </n-icon>
-          </button>
-          <button class="annotation-btn split-btn" @click.stop="handleSplitAnnotation(annotation)" title="分割标注">
-            <n-icon size="16">
-              <Split />
+              <More />
             </n-icon>
           </button>
         </div>
@@ -123,7 +101,16 @@
       </div>
     </n-modal>
 
-    <!-- 编辑操作按钮 - 移除外部的按钮 -->
+    <!-- 标注操作菜单 -->
+    <n-dropdown
+      :show="showDropdown"
+      :options="dropdownOptions"
+      :x="dropdownX"
+      :y="dropdownY"
+      placement="bottom-start"
+      @select="handleDropdownSelect"
+      @clickoutside="hideAnnotationMenu"
+    />
   </div>
 </template>
 
@@ -132,7 +119,7 @@ import { ref, computed, reactive, onMounted, onUnmounted, watch, h } from 'vue'
 import { NIcon, NButton, useDialog, NModal, NInput, NCheckbox } from 'naive-ui'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useProjectStore } from '~/stores/project'
-import { Add as IconAdd, Edit, Delete, MergeCells, Split } from '@icon-park/vue-next'
+import { Add as IconAdd, Edit, Delete, MergeCells, Split, More } from '@icon-park/vue-next'
 import { useMouseInElement, watchThrottled, useMousePressed, useDebounceFn, useEventListener, useElementSize, useElementBounding } from '@vueuse/core'
 import type { AudioPlayer } from '~/types/audio'
 
@@ -521,6 +508,77 @@ watch(pressed, (isPressed) => {
   }
 })
 
+// 标注菜单相关状态
+const showDropdown = ref(false)
+const dropdownX = ref(0)
+const dropdownY = ref(0)
+const currentMenuAnnotation = ref<any>(null)
+const dropdownOptions = computed(() => {
+  const annotation = currentMenuAnnotation.value
+  return [
+    {
+      label: '删除',
+      key: 'delete',
+      icon: () => h(Delete)
+    },
+    {
+      label: '合并到左边',
+      key: 'merge_left',
+      icon: () => h(MergeCells),
+      disabled: !annotation || !hasPreviousAnnotation(annotation)
+    },
+    {
+      label: '合并到右边',
+      key: 'merge_right',
+      icon: () => h(MergeCells, { style: { transform: 'rotate(180deg)' } }),
+      disabled: !annotation || !hasNextAnnotation(annotation)
+    },
+    {
+      label: '分割标注',
+      key: 'split',
+      icon: () => h(Split)
+    }
+  ]
+})
+
+// 显示标注菜单
+const showAnnotationMenu = (annotation: any, event: MouseEvent) => {
+  showDropdown.value = true
+  dropdownX.value = event.clientX
+  dropdownY.value = event.clientY
+  currentMenuAnnotation.value = annotation
+}
+
+// 隐藏标注菜单
+const hideAnnotationMenu = () => {
+  showDropdown.value = false
+  currentMenuAnnotation.value = null
+}
+
+// 处理菜单选项点击
+const handleDropdownSelect = (key: string) => {
+  const annotation = currentMenuAnnotation.value
+  if (!annotation) return
+
+  switch (key) {
+    case 'delete':
+      handleDeleteClick(annotation)
+      break
+    case 'merge_left':
+      handleMergeLeft(annotation)
+      break
+    case 'merge_right':
+      handleMergeRight(annotation)
+      break
+    case 'split':
+      handleSplitAnnotation(annotation)
+      break
+  }
+  
+  // 选择后隐藏菜单
+  hideAnnotationMenu()
+}
+
 onMounted(() => {
 
   watchThrottled(mouseX, () => {
@@ -907,6 +965,15 @@ const cancelSplit = () => {
 
 .edit-btn:hover {
   background: #409eff;
+  color: white;
+}
+
+.more-btn {
+  color: #606266;
+}
+
+.more-btn:hover {
+  background: #606266;
   color: white;
 }
 
