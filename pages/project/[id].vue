@@ -82,21 +82,20 @@
                     >
                       删除
                     </n-button>
-                    <n-button
+                    <!-- <n-button
                       type="primary"
                       @click="handleEditAnnotations(file)"
                       :disabled="file.status !== 'ready'"
                     >
                       标注
-                    </n-button>
+                    </n-button> -->
                     <n-button
                       type="primary"
-                      ghost
                       @click="handleSwitchToDOM(file)"
                       :disabled="file.status !== 'ready'"
                       title="使用DOM渲染优化的标注界面"
                     >
-                      DOM标注
+                      标注
                     </n-button>
                   </n-space>
                 </n-space>

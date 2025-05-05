@@ -106,8 +106,48 @@ export const useProjectStore = defineStore('project', {
           const audioDuration = audioFile?.duration || 0
           
           // 按开始时间排序
-          data.annotations[audioId].sort((a: Annotation, b: Annotation) => a.start - b.start)
-          validatedAnnotations[audioId] = data.annotations[audioId]
+          const sortedAnnotations = [...data.annotations[audioId]].sort((a: Annotation, b: Annotation) => a.start - b.start)
+          
+          // 验证并过滤标注
+          const validAnnotations = sortedAnnotations.filter((annotation: Annotation) => {
+            // 舍弃长度为0或负的标注
+            if (annotation.end <= annotation.start) {
+              console.warn(`舍弃无效标注：时长为0或负值`,{annotation})
+              return false
+            }
+            return true
+          }).map((annotation: Annotation) => {
+            // 校验开始时间和结束时间
+            let { start, end } = annotation
+            const originalStart = start
+            const originalEnd = end
+            
+            // 开始时间不小于0
+            if (start < 0) {
+              start = 0
+              console.warn(`调整标注开始时间：从 ${originalStart} 到 0`, {annotation})
+            }
+            
+            // 结束时间不大于总时长
+            if (end > audioDuration) {
+              end = audioDuration
+              console.warn(`调整标注结束时间：从 ${originalEnd} 到 ${audioDuration}`, {annotation})
+            }
+            
+            return { ...annotation, start, end }
+          })
+          
+          // 检查相邻标注是否有重叠
+          for (let i = 0; i < validAnnotations.length - 1; i++) {
+            const current = validAnnotations[i]
+            const next = validAnnotations[i + 1]
+            
+            if (current.end > next.start) {
+              console.warn(`检测到标注重叠：ID ${current.id} (${current.start}-${current.end}) 与 ID ${next.id} (${next.start}-${next.end})`, {current, next})
+            }
+          }
+          
+          validatedAnnotations[audioId] = validAnnotations
         }
         
         this.annotations = validatedAnnotations
@@ -372,22 +412,55 @@ export const useProjectStore = defineStore('project', {
       try {
         // 确保标注时间不超出音频时长
         const audioDuration = this.currentAudioFile.duration || 0
-        const validAnnotations = annotations.map(annotation => {
-          const validStart = Math.max(0, Math.min(annotation.start, audioDuration))
-          const validEnd = Math.max(0, Math.min(annotation.end, audioDuration))
+        
+        // 按开始时间排序标注
+        const sortedAnnotations = [...annotations].sort((a, b) => a.start - b.start)
+        
+        // 验证并过滤标注
+        const validAnnotations = sortedAnnotations.filter(annotation => {
+          // 舍弃长度为0或负的标注
+          if (annotation.end <= annotation.start) {
+            console.warn(`舍弃无效标注：时长为0或负值 (ID: ${annotation.id}, 开始: ${annotation.start}, 结束: ${annotation.end})`)
+            return false
+          }
+          return true
+        }).map(annotation => {
+          const originalStart = annotation.start
+          const originalEnd = annotation.end
+          
+          // 开始时间不小于0
+          let validStart = Math.max(0, annotation.start)
+          if (validStart !== originalStart) {
+            console.warn(`调整标注开始时间：从 ${originalStart} 到 ${validStart} (ID: ${annotation.id})`)
+          }
+          
+          // 结束时间不大于总时长
+          let validEnd = Math.min(annotation.end, audioDuration)
+          if (validEnd !== originalEnd) {
+            console.warn(`调整标注结束时间：从 ${originalEnd} 到 ${validEnd} (ID: ${annotation.id})`)
+          }
           
           // 确保 end 始终大于 start
-          const finalEnd = validEnd <= validStart ? Math.min(validStart + 0.1, audioDuration) : validEnd
+          if (validEnd <= validStart) {
+            validEnd = Math.min(validStart + 0.1, audioDuration)
+          }
           
           return {
             ...annotation,
             start: validStart,
-            end: finalEnd
+            end: validEnd
           }
         })
-
-        // 按开始时间排序标注
-        validAnnotations.sort((a, b) => a.start - b.start)
+        
+        // 检查相邻标注是否有重叠
+        for (let i = 0; i < validAnnotations.length - 1; i++) {
+          const current = validAnnotations[i]
+          const next = validAnnotations[i + 1]
+          
+          if (current.end > next.start) {
+            console.warn(`检测到标注重叠：ID ${current.id} (${current.start}-${current.end}) 与 ID ${next.id} (${next.start}-${next.end})`)
+          }
+        }
 
         // 更新标注
         this.annotations[this.currentAudioFile.id] = validAnnotations

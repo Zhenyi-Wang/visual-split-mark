@@ -107,8 +107,8 @@ export async function loadAudioBlobWithProgress(
     if (contentLength) {
       const progress = (receivedLength / contentLength) * 100
       await nextTick(() => onProgress('download', progress))
-      console.log('下载进度:', progress.toFixed(1) + '%', 
-        '已下载:', (receivedLength / 1024 / 1024).toFixed(2), 'MB')
+      // console.log('下载进度:', progress.toFixed(1) + '%', 
+      //   '已下载:', (receivedLength / 1024 / 1024).toFixed(2), 'MB')
     } else {
       // 否则只报告已下载的大小
       await nextTick(() => onProgress('download', 0))
@@ -148,8 +148,8 @@ export async function loadAudioBlobWithProgress(
       if (decodedSegments < SEGMENTS) {
         const progress = (decodedSegments / SEGMENTS) * 100
         await nextTick(() => onProgress('decode', progress))
-        console.log('解码进度:', progress.toFixed(1) + '%',
-          '已用时:', ((performance.now() - startTime) / 1000).toFixed(1), '秒')
+        // console.log('解码进度:', progress.toFixed(1) + '%',
+        //   '已用时:', ((performance.now() - startTime) / 1000).toFixed(1), '秒')
       }
     }, 100)
 

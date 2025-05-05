@@ -163,6 +163,11 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       })
     },
     
+    // 清除所有标注
+    clearAllAnnotations() {
+      this.projectStore.clearAllAnnotations()
+    },
+
     // 重置视图状态
     resetViewport() {
       this.viewportState = {
