@@ -47,7 +47,7 @@
 
     <!-- 添加标注按钮 -->
     <div v-show="createButtonShow" class="annotation-add-button" :style="{ left: `${createButtonPositionPx}px` }"
-      @click="handleAddAnnotationClick">
+      @click="handleAddAnnotationClick('normal')">
       <n-icon size="18">
         <IconAdd />
       </n-icon>
@@ -173,6 +173,13 @@ const createPreviewAnnotation = reactive({
   id: null as string | null
 })
 
+// 添加方向类型定义
+type AddDirection = 'normal' | 'from_left' | 'from_right'
+
+// 状态变量
+const addDirection = ref<AddDirection>('normal')
+const selectedOrHoveredAnnotation = ref<any>(null)
+
 // 鼠标在容器内的位置
 const { x: mouseX } = useMouseInElement()
 
@@ -258,7 +265,7 @@ const getPreviewAnnotationStyle = () => {
     annotation.end = createPreviewAnnotation.start
   }
 
-  // 如果开始时间等于结束时间，设置结束时间为0.1秒
+  // 如果开始时间等于结束时间，增加0.1秒
   if (annotation.start === annotation.end) {
     annotation.end = annotation.end + 0.1
   }
@@ -304,16 +311,50 @@ const updateDragging = () => {
   // 计算时间点
   const time = getTimeFromPx(relativeX)
 
-  // 获取拖拽的限制范围
-  const minTime = Math.max(
-    viewStartTime.value,
-    domAnnotationStore.getPreviousAnnotationEndTime(createPreviewAnnotation.start)
-  )
+  let minTime, maxTime
+  const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(createPreviewAnnotation.end)
+  const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.start)
 
-  const maxTime = Math.min(
-    viewEndTime.value,
-    domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.start)
-  )
+  // 根据不同的添加方向设置不同的边界限制
+  switch (addDirection.value) {
+    case 'from_left':
+      // 从左边添加：最大时间是当前标注的起始时间
+      minTime = Math.max(
+        viewStartTime.value,
+        prevAnnotationEnd
+      )
+      // 使用特定标注的起始时间作为最大边界
+      maxTime = Math.min(
+        viewEndTime.value,
+        selectedOrHoveredAnnotation.value?.start || nextAnnotationStart
+      ) - 0.1
+      break
+      
+    case 'from_right':
+      // 从右边添加：最小时间是当前标注的结束时间
+      minTime = Math.max(
+        viewStartTime.value,
+        selectedOrHoveredAnnotation.value?.end || prevAnnotationEnd
+      ) + 0.1
+      maxTime = Math.min(
+        viewEndTime.value,
+        nextAnnotationStart
+      )
+      break
+      
+    case 'normal':
+    default:
+      // 在空白区域添加（保持现有逻辑）
+      minTime = Math.max(
+        viewStartTime.value,
+        prevAnnotationEnd
+      )
+      maxTime = Math.min(
+        viewEndTime.value,
+        nextAnnotationStart
+      )
+      break
+  }
 
   // 限制结束时间在有效范围内
   createPreviewAnnotation.end = Math.min(Math.max(time, minTime), maxTime)
@@ -325,7 +366,8 @@ const updateDragging = () => {
     viewStart: viewStartTime.value,
     viewEnd: viewEndTime.value,
     prevEnd: domAnnotationStore.getPreviousAnnotationEndTime(createPreviewAnnotation.start),
-    nextStart: domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.start)
+    nextStart: domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.start),
+    direction: addDirection.value
   })
 }
 
@@ -354,12 +396,13 @@ const updateResizing = () => {
 }
 
 // 开始创建标注
-const handleAddAnnotationClick = () => {
+const handleAddAnnotationClick = (direction: AddDirection = 'normal') => {
   domAnnotationStore.setAnnotationState('creating_drag')
   createPreviewAnnotation.text = ''
   createPreviewAnnotation.id = null
   createPreviewAnnotation.start = currentPlayTime.value
   createPreviewAnnotation.end = getTimeFromPx(mouseX.value)
+  addDirection.value = direction // 保存添加方向
 }
 
 // 开始调整标注大小
@@ -515,6 +558,12 @@ const dropdownY = ref(0)
 const currentMenuAnnotation = ref<any>(null)
 const dropdownOptions = computed(() => {
   const annotation = currentMenuAnnotation.value
+  if (!annotation) return []
+  
+  // 检查标注左右是否有相邻标注
+  const hasLeftAdjacent = hasPreviousAnnotation(annotation)
+  const hasRightAdjacent = hasNextAnnotation(annotation)
+  
   return [
     {
       label: '删除',
@@ -525,18 +574,33 @@ const dropdownOptions = computed(() => {
       label: '合并到左边',
       key: 'merge_left',
       icon: () => h(MergeCells),
-      disabled: !annotation || !hasPreviousAnnotation(annotation)
+      disabled: !hasLeftAdjacent
     },
     {
       label: '合并到右边',
       key: 'merge_right',
       icon: () => h(MergeCells, { style: { transform: 'rotate(180deg)' } }),
-      disabled: !annotation || !hasNextAnnotation(annotation)
+      disabled: !hasRightAdjacent
     },
     {
       label: '分割标注',
       key: 'split',
       icon: () => h(Split)
+    },
+    {
+      type: 'divider'
+    },
+    {
+      label: '添加到左边',
+      key: 'add_left',
+      icon: () => h('div', { style: { transform: 'scale(-1, 1)' } }, [h(IconAdd)]),
+      disabled: hasLeftAdjacent
+    },
+    {
+      label: '添加到右边',
+      key: 'add_right',
+      icon: () => h(IconAdd),
+      disabled: hasRightAdjacent
     }
   ]
 })
@@ -572,6 +636,12 @@ const handleDropdownSelect = (key: string) => {
       break
     case 'split':
       handleSplitAnnotation(annotation)
+      break
+    case 'add_left':
+      handleAddToLeft(annotation)
+      break
+    case 'add_right':
+      handleAddToRight(annotation)
       break
   }
   
@@ -773,6 +843,26 @@ const cancelSplit = () => {
   currentSplitAnnotation.value = null
   splitPosition.value = 0
   previewSplitPosition.value = null
+}
+
+// 在标注左边添加新标注
+const handleAddToLeft = (annotation: any) => {
+  if (!annotation) return
+
+  // 保存当前操作的标注
+  selectedOrHoveredAnnotation.value = annotation
+  domAnnotationStore.setCurrentTime(annotation.start)
+  handleAddAnnotationClick('from_left')
+}
+
+// 在标注右边添加新标注
+const handleAddToRight = (annotation: any) => {
+  if (!annotation) return
+  
+  // 保存当前操作的标注
+  selectedOrHoveredAnnotation.value = annotation
+  domAnnotationStore.setCurrentTime(annotation.end)
+  handleAddAnnotationClick('from_right')
 }
 </script>
 
