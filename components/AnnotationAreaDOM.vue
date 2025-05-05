@@ -355,7 +355,7 @@ const handleResizeStart = (annotation: any, direction: 'left' | 'right', isLinke
   // event.stopPropagation();
   
   // 设置本地鼠标按下状态
-  isMouseDown.value = true;
+  // isMouseDown.value = true;
   
   // 调用原来的调整大小函数
   startResizing(annotation, direction, isLinked);
@@ -606,14 +606,6 @@ watch(pressed, (isPressed) => {
   }
 })
 
-// 监听鼠标移动
-watch(mouseX, () => {
-  // 如果处于调整大小状态，则更新标注大小
-  if (annotationState.value === 'resizing' && isMouseDown.value) {
-    updateResizing();
-  }
-}, { immediate: false });
-
 onMounted(() => {
   watchThrottled(mouseX, () => {
     if (!annotationAreaRef.value) return;
@@ -621,7 +613,7 @@ onMounted(() => {
     // 根据当前状态处理鼠标移动
     if (annotationState.value === 'creating_drag') {
       updateDragging();
-    } else if (annotationState.value === 'resizing' && isMouseDown.value) {
+    } else if (annotationState.value === 'resizing') {
       updateResizing();
     }
   }, { throttle: 50 });
