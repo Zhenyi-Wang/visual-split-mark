@@ -2,7 +2,7 @@
   <div class="annotation-area" ref="annotationAreaRef">
     <!-- 根据标注数据渲染标注项 -->
     <div v-for="annotation in visibleAnnotations" :key="annotation.id" class="annotation-item"
-      :style="getAnnotationStyle(annotation)">
+      :style="getAnnotationStyle(annotation)" @mousedown="handleAnnotationClick(annotation)">
       <!-- 当标注不在编辑状态时显示内容 -->
       <div class="annotation-content" v-if="annotation.id !== domAnnotationStore.uiState.editingAnnotationId">
         {{ annotation.text || '(无文本)' }}
@@ -241,6 +241,14 @@ const modalAnnotation = reactive({
   end: 0,
   text: ''
 })
+
+const handleAnnotationClick = (annotation: any) => {
+  if (domAnnotationStore.uiState.annotationState !== 'idle' || !annotation?.id) {
+    return
+  }
+
+  props.audioPlayer.seek(annotation.start)
+}
 
 // 时间范围限制计算属性
 const minStartTime = computed(() => {
