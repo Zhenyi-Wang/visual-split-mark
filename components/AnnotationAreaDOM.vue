@@ -1051,7 +1051,7 @@ const updateResizing = () => {
 .annotation-item {
   box-sizing: border-box;
   position: absolute;
-  height: 80px;
+  height: 120px;
   background-color: rgba(64, 158, 255, 0.2);
   border: 1px solid #409eff;
   border-radius: 4px;
@@ -1078,10 +1078,11 @@ const updateResizing = () => {
   -webkit-line-clamp: 3;
   line-clamp: 3;
   -webkit-box-orient: vertical;
-  line-height: 1.3;
+  line-height: 1.4;
   text-overflow: ellipsis;
   text-align: left;
-  padding: 4px 0;
+  padding: 0;
+  margin: 20px 0;
 }
 
 .annotation-handle {
@@ -1090,17 +1091,15 @@ const updateResizing = () => {
   height: 100%;
   top: 0;
   background-color: rgba(64, 158, 255, 0.5);
-  cursor: ew-resize;
+  cursor: col-resize;
 }
 
 .annotation-handle-left {
   left: 0;
-  border-radius: 4px 0 0 4px;
 }
 
 .annotation-handle-right {
   right: 0;
-  border-radius: 0 4px 4px 0;
 }
 
 .annotation-add-button {
@@ -1165,8 +1164,9 @@ const updateResizing = () => {
 
 .annotation-buttons {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 20%;
+  bottom: 20%;
+  right: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1177,8 +1177,10 @@ const updateResizing = () => {
 
 .annotation-buttons-row {
   display: flex;
+  height: 100%;
   gap: 4px;
-  justify-content: flex-end;
+  justify-content: center;
+  flex-direction: column;
 }
 
 /* 悬浮时显示按钮 */
@@ -1345,7 +1347,8 @@ const updateResizing = () => {
 /* 操作杆容器 */
 .annotation-handle-container {
   position: absolute;
-  width: 4px;
+  width: 50%;
+  max-width: 15px;
   height: 100%;
   top: 0;
   display: flex;
@@ -1364,19 +1367,20 @@ const updateResizing = () => {
 /* 操作杆区域 */
 .annotation-handle-section {
   width: 100%;
+  z-index: 100;
 }
 
 .annotation-handle-top-section {
-  height: 40%;
+  height: 15%;
   position: relative;
 }
 
 .annotation-handle-middle-section {
-  height: 20%;
+  height: 70%;
 }
 
 .annotation-handle-bottom-section {
-  height: 40%;
+  height: 15%;
   position: relative;
 }
 
@@ -1394,8 +1398,6 @@ const updateResizing = () => {
 .annotation-handle-top {
   background-color: rgba(0, 200, 150, 0.6);
   /* 使用不同颜色区分功能 */
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
   border: 1px dashed rgba(0, 200, 150, 0.8);
   border-bottom: none;
 }
@@ -1407,9 +1409,9 @@ const updateResizing = () => {
 .annotation-handle-top:hover::after {
   content: "联动";
   position: absolute;
-  top: 50%;
-  left: 10px;
-  transform: translateY(-50%);
+  top: 0;
+  left: 50%;
+  transform: translateY(-100%) translateX(-50%);
   font-size: 10px;
   color: white;
   white-space: nowrap;
@@ -1422,10 +1424,9 @@ const updateResizing = () => {
 /* 下段操作杆（独立）*/
 .annotation-handle-bottom {
   background-color: rgba(64, 158, 255, 0.5);
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 4px;
   border: 1px solid rgba(64, 158, 255, 0.7);
   border-top: none;
+  cursor: ew-resize;
 }
 
 .annotation-handle-bottom:hover {
@@ -1435,9 +1436,9 @@ const updateResizing = () => {
 .annotation-handle-bottom:hover::after {
   content: "单独";
   position: absolute;
-  top: 50%;
-  left: 10px;
-  transform: translateY(-50%);
+  bottom: 0;
+  left: 50%;
+  transform: translateY(100%) translateX(-50%);
   font-size: 10px;
   color: white;
   white-space: nowrap;
@@ -1446,24 +1447,25 @@ const updateResizing = () => {
   border-radius: 2px;
   pointer-events: none;
 }
-
-/* 方向特定样式 */
-.annotation-handle-left {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  cursor: ew-resize;
+.annotation-handle-top.annotation-handle-left {
+  border-bottom-right-radius: 50%;
+  border-top-left-radius: 4px;
 }
 
-.annotation-handle-right {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  cursor: ew-resize;
-}
-
-/* 联动操作杆特殊鼠标样式 */
-.annotation-handle-top.annotation-handle-left,
 .annotation-handle-top.annotation-handle-right {
-  cursor: ew-resize;
-  /* 或者使用特殊指针 */
+  border-bottom-left-radius: 50%;
+  border-top-right-radius: 4px;
 }
+
+.annotation-handle-bottom.annotation-handle-left {
+  border-top-right-radius: 50%;
+  border-bottom-left-radius: 4px;
+}
+
+.annotation-handle-bottom.annotation-handle-right {
+  border-top-left-radius: 50%;
+  border-bottom-right-radius: 4px;
+}
+
+
 </style>
