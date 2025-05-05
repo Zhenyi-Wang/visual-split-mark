@@ -10,19 +10,8 @@
       </div>
 
       <!-- 编辑状态 -->
-      <div v-else class="annotation-edit-container">
-        <textarea ref="editAnnotationInputRef" v-model="tempAnnotationText" class="annotation-input"
-          placeholder="Ctrl+回车保存, Esc取消" rows="3" @keyup.enter.ctrl="confirmEditAnnotation"
-          @keyup.esc="cancelEditAnnotation"></textarea>
-
-        <div class="annotation-edit-actions">
-          <n-button size="small" @click="cancelEditAnnotation">
-            取消
-          </n-button>
-          <n-button size="small" type="primary" @click="confirmEditAnnotation">
-            确认
-          </n-button>
-        </div>
+      <div v-else class="annotation-content annotation-preview-content">
+        正在编辑...
       </div>
 
       <!-- 操作按钮区域 -->
@@ -56,22 +45,7 @@
 
     <!-- 预览标注项 -->
     <div v-if="createPreviewShow" class="annotation-item annotation-preview" :style="getPreviewAnnotationStyle()">
-      <template v-if="isCreateAnnotationConfirming">
-        <textarea ref="newAnnotationInputRef" v-model="tempAnnotationText" class="annotation-input"
-          placeholder="Ctrl+回车保存, Esc取消" rows="3" @keyup.enter @keyup.enter.ctrl="confirmNewAnnotation"
-          @keyup.esc="cancelNewAnnotation"></textarea>
-
-        <!-- 编辑操作按钮 - 移到预览标注项内部 -->
-        <div class="annotation-edit-actions">
-          <n-button size="small" @click="cancelNewAnnotation">
-            取消
-          </n-button>
-          <n-button size="small" type="primary" @click="confirmNewAnnotation">
-            确认
-          </n-button>
-        </div>
-      </template>
-      <div v-else class="annotation-content annotation-preview-content">
+      <div class="annotation-content annotation-preview-content">
         点击确认范围
       </div>
     </div>
@@ -101,6 +75,47 @@
       </div>
     </n-modal>
 
+    <!-- 标注编辑模态框 -->
+    <n-modal v-model:show="showAnnotationModal" preset="card" :title="isEditingExisting ? '编辑标注' : '创建标注'" style="width: 450px">
+      <div class="modal-content">
+        <!-- 时间范围编辑 -->
+        <div class="time-range-editor">
+          <div class="time-editor-label">开始时间:</div>
+          <n-input-number 
+            v-model:value="modalAnnotation.start" 
+            :min="minStartTime"
+            :max="maxStartTime"
+            :step="0.1" 
+            size="small"
+          />
+          
+          <div class="time-editor-label">结束时间:</div>
+          <n-input-number 
+            v-model:value="modalAnnotation.end" 
+            :min="minEndTime"
+            :max="maxEndTime"
+            :step="0.1" 
+            size="small"
+          />
+        </div>
+        
+        <!-- 文本编辑区 -->
+        <textarea 
+          v-model="modalAnnotation.text" 
+          class="modal-annotation-input" 
+          placeholder="请输入标注内容"
+          rows="5"
+          @keyup.enter.ctrl="confirmAnnotation"
+          @keyup.esc="cancelAnnotation"
+        ></textarea>
+        
+        <div class="modal-actions">
+          <n-button @click="cancelAnnotation">取消</n-button>
+          <n-button type="primary" @click="confirmAnnotation">确认 (Ctrl+Enter)</n-button>
+        </div>
+      </div>
+    </n-modal>
+
     <!-- 标注操作菜单 -->
     <n-dropdown
       :show="showDropdown"
@@ -116,7 +131,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted, watch, h } from 'vue'
-import { NIcon, NButton, useDialog, NModal, NInput, NCheckbox } from 'naive-ui'
+import { NIcon, NButton, useDialog, NModal, NInput, NCheckbox, NInputNumber } from 'naive-ui'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useProjectStore } from '~/stores/project'
 import { Add as IconAdd, Edit, Delete, MergeCells, Split, More } from '@icon-park/vue-next'
@@ -179,6 +194,47 @@ type AddDirection = 'normal' | 'from_left' | 'from_right'
 // 状态变量
 const addDirection = ref<AddDirection>('normal')
 const selectedOrHoveredAnnotation = ref<any>(null)
+
+// 模态框控制
+const showAnnotationModal = ref(false)
+const isEditingExisting = ref(false)
+
+// 模态框中的标注数据
+const modalAnnotation = reactive({
+  id: null as string | null,
+  start: 0,
+  end: 0,
+  text: ''
+})
+
+// 时间范围限制计算属性
+const minStartTime = computed(() => {
+  // 获取前一个标注的结束时间，或者视图起始时间
+  const prevAnnotationEnd = modalAnnotation.id 
+    ? domAnnotationStore.getPreviousAnnotationEndTime(Number(modalAnnotation.id))
+    : domAnnotationStore.getPreviousAnnotationEndTime(modalAnnotation.end)
+  return Math.max(0, prevAnnotationEnd || 0)
+})
+
+const maxStartTime = computed(() => {
+  // 最大开始时间不能超过结束时间减去最小间隔
+  return Math.max(0, modalAnnotation.end - 0.1)
+})
+
+const minEndTime = computed(() => {
+  // 最小结束时间不能小于开始时间加上最小间隔
+  return Math.max(0, modalAnnotation.start + 0.1)
+})
+
+const maxEndTime = computed(() => {
+  // 获取下一个标注的开始时间，或者音频总时长
+  const nextAnnotationStart = modalAnnotation.id
+    ? domAnnotationStore.getNextAnnotationStartTime(Number(modalAnnotation.id)) 
+    : domAnnotationStore.getNextAnnotationStartTime(modalAnnotation.start)
+  
+  const audioDuration = domAnnotationStore.audioDuration
+  return Math.min(audioDuration, nextAnnotationStart || audioDuration)
+})
 
 // 鼠标在容器内的位置
 const { x: mouseX } = useMouseInElement()
@@ -422,36 +478,40 @@ const startEditingText = (annotation: any) => {
   createPreviewAnnotation.end = annotation.end
   createPreviewAnnotation.text = annotation.text
   createPreviewAnnotation.id = annotation.id
-  tempAnnotationText.value = annotation.text
+  
+  // 设置模态框数据
+  modalAnnotation.id = annotation.id
+  modalAnnotation.start = Math.min(annotation.start, annotation.end)
+  modalAnnotation.end = Math.max(annotation.start, annotation.end)
+  modalAnnotation.text = annotation.text || ''
+  
+  // 标记为编辑现有标注
+  isEditingExisting.value = true
+  
+  // 显示模态框
+  showAnnotationModal.value = true
+  
+  // 延迟聚焦输入框
+  setTimeout(() => {
+    const textarea = document.querySelector('.modal-annotation-input')
+    if (textarea) {
+      try {
+        (textarea as HTMLTextAreaElement).focus()
+      } catch (error) {
+        console.error('无法聚焦编辑输入框:', error)
+      }
+    }
+  }, 100)
 }
 
 // 确认新标注
 const confirmNewAnnotation = () => {
-  if (annotationState.value === 'creating_edit') {
-    // 创建新标注
-    domAnnotationStore.createAnnotation({
-      start: createPreviewAnnotation.start,
-      end: createPreviewAnnotation.end,
-      text: tempAnnotationText.value
-    })
-  } else if (annotationState.value === 'editing_text' && createPreviewAnnotation.id) {
-    // 更新现有标注
-    domAnnotationStore.updateAnnotation(createPreviewAnnotation.id, {
-      text: tempAnnotationText.value
-    })
-  }
-
-  // 重置状态
-  domAnnotationStore.setAnnotationState('idle')
-  resizeDirection.value = null
-  tempAnnotationText.value = ''
+  confirmAnnotation()
 }
 
 // 取消操作
 const cancelNewAnnotation = () => {
-  domAnnotationStore.setAnnotationState('idle')
-  resizeDirection.value = null
-  tempAnnotationText.value = ''
+  cancelAnnotation()
 }
 
 // 处理编辑按钮点击
@@ -460,65 +520,76 @@ const handleEditClick = (annotation: any) => {
   domAnnotationStore.setAnnotationState('editing_text')
   domAnnotationStore.uiState.editingAnnotationId = annotation.id
 
-  // 设置临时文本
-  tempAnnotationText.value = annotation.text || ''
-
+  // 设置模态框数据
+  modalAnnotation.id = annotation.id
+  modalAnnotation.start = Math.min(annotation.start, annotation.end)
+  modalAnnotation.end = Math.max(annotation.start, annotation.end)
+  modalAnnotation.text = annotation.text || ''
+  
+  // 标记为编辑现有标注
+  isEditingExisting.value = true
+  
+  // 显示模态框
+  showAnnotationModal.value = true
+  
   // 延迟聚焦输入框
   setTimeout(() => {
-    if (editAnnotationInputRef.value) {
+    const textarea = document.querySelector('.modal-annotation-input')
+    if (textarea) {
       try {
-        editAnnotationInputRef.value.focus()
+        (textarea as HTMLTextAreaElement).focus()
       } catch (error) {
         console.error('无法聚焦编辑输入框:', error)
       }
-    } else {
-      console.warn('编辑输入框引用为空')
     }
   }, 100)
 }
 
-// 处理删除按钮点击
-const handleDeleteClick = (annotation: any) => {
-  dialog.warning({
-    title: '确认删除',
-    content: () => {
-      return h('div', [
-        h('p', '确定要删除此标注吗？')
-      ])
-    },
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: () => {
-      // 删除标注
-      if (annotation.id) {
-        domAnnotationStore.deleteAnnotation(annotation.id)
-      }
-    }
-  })
-}
-
 // 确认编辑
 const confirmEditAnnotation = () => {
-  console.log('确认编辑', domAnnotationStore.uiState.editingAnnotationId, tempAnnotationText.value)
-  const editingId = domAnnotationStore.uiState.editingAnnotationId
-  if (editingId) {
-    // 更新标注文本
-    domAnnotationStore.updateAnnotation(editingId, {
-      text: tempAnnotationText.value
-    })
-
-    // 重置状态
-    domAnnotationStore.setAnnotationState('idle')
-    domAnnotationStore.uiState.editingAnnotationId = null
-    tempAnnotationText.value = ''
-  }
+  confirmAnnotation()
 }
 
 // 取消编辑
 const cancelEditAnnotation = () => {
+  cancelAnnotation()
+}
+
+// 确认标注（新建或编辑）
+const confirmAnnotation = () => {
+  if (isEditingExisting.value && modalAnnotation.id) {
+    // 更新现有标注
+    domAnnotationStore.updateAnnotation(modalAnnotation.id, {
+      start: modalAnnotation.start,
+      end: modalAnnotation.end,
+      text: modalAnnotation.text
+    })
+  } else if (annotationState.value === 'creating_edit') {
+    // 创建新标注
+    domAnnotationStore.createAnnotation({
+      start: modalAnnotation.start,
+      end: modalAnnotation.end,
+      text: modalAnnotation.text
+    })
+  }
+
+  // 重置状态
   domAnnotationStore.setAnnotationState('idle')
   domAnnotationStore.uiState.editingAnnotationId = null
-  tempAnnotationText.value = ''
+  resizeDirection.value = null
+  
+  // 关闭模态框
+  showAnnotationModal.value = false
+}
+
+// 取消操作
+const cancelAnnotation = () => {
+  domAnnotationStore.setAnnotationState('idle')
+  domAnnotationStore.uiState.editingAnnotationId = null
+  resizeDirection.value = null
+  
+  // 关闭模态框
+  showAnnotationModal.value = false
 }
 
 // 监听鼠标按下状态变化
@@ -528,11 +599,24 @@ watch(pressed, (isPressed) => {
     if (annotationState.value === 'creating_drag') {
       // 从拖拽状态切换到编辑状态
       domAnnotationStore.setAnnotationState('creating_edit')
-
+      
+      // 设置模态框数据
+      modalAnnotation.id = null
+      modalAnnotation.start = Math.min(createPreviewAnnotation.start, createPreviewAnnotation.end)
+      modalAnnotation.end = Math.max(createPreviewAnnotation.start, createPreviewAnnotation.end)
+      modalAnnotation.text = ''
+      
+      // 标记为创建新标注
+      isEditingExisting.value = false
+      
+      // 显示模态框
+      showAnnotationModal.value = true
+      
       // 聚焦输入框
       setTimeout(() => {
-        if (newAnnotationInputRef.value) {
-          newAnnotationInputRef.value.focus()
+        const textarea = document.querySelector('.modal-annotation-input')
+        if (textarea) {
+          (textarea as HTMLTextAreaElement).focus()
         }
       }, 50)
     } else if (annotationState.value === 'resizing') {
@@ -864,6 +948,26 @@ const handleAddToRight = (annotation: any) => {
   domAnnotationStore.setCurrentTime(annotation.end)
   handleAddAnnotationClick('from_right')
 }
+
+// 处理删除按钮点击
+const handleDeleteClick = (annotation: any) => {
+  dialog.warning({
+    title: '确认删除',
+    content: () => {
+      return h('div', [
+        h('p', '确定要删除此标注吗？')
+      ])
+    },
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      // 删除标注
+      if (annotation.id) {
+        domAnnotationStore.deleteAnnotation(annotation.id)
+      }
+    }
+  })
+}
 </script>
 
 <style scoped>
@@ -1145,6 +1249,43 @@ const handleAddToRight = (annotation: any) => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 16px;
+}
+
+/* 模态框样式 */
+.modal-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-range-editor {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.time-editor-label {
+  font-size: 14px;
+  color: #606266;
+}
+
+.modal-annotation-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  resize: none;
+  margin-bottom: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
   margin-top: 16px;
 }
 </style>
