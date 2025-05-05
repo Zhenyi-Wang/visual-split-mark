@@ -86,21 +86,46 @@
 
     <!-- 分割标注模态框 -->
     <n-modal v-model:show="showSplitModal" preset="card" title="分割标注" style="width: 400px">
-      <p>请点击要分割的位置：</p>
-      <div class="split-preview">
+      <p v-if="splitText">请点击要分割的位置：</p>
+      <p v-else>此标注没有文本内容，请选择分割方式：</p>
+
+      <div v-if="splitText" class="split-preview">
         <div class="split-text-container">
+          <!-- 新增：最前面一个空白span用于选中第0个分割点 -->
+          <span class="split-char split-blank" :class="{
+            'split-position': splitPosition === 0,
+            'hover-split': previewSplitPosition === 0
+          }" @click="splitPosition = 0" @mouseover="previewSplitPosition = 0" @mouseleave="previewSplitPosition = null"></span>
           <span v-for="(char, index) in splitText" :key="index" class="split-char" :class="{
             'split-first-part': index < splitPosition,
             'split-second-part': index >= splitPosition,
-            'split-position': index === splitPosition - 1,
-            'hover-split': previewSplitPosition !== null && index === previewSplitPosition - 1
+            'split-position': index === splitPosition - 1 && splitPosition > 0,
+            'hover-split': previewSplitPosition !== null && index === previewSplitPosition - 1 && previewSplitPosition > 0
           }" @click="splitPosition = index + 1" @mouseover="previewSplitPosition = index + 1"
             @mouseleave="previewSplitPosition = null">{{ char }}</span>
         </div>
       </div>
+
+      <div v-else class="no-text-split-options">
+        <div class="split-ratio-container">
+          <div class="split-ratio-label">分割比例：</div>
+          <n-slider v-model:value="noTextSplitRatio" :step="5" :marks="{
+            0: '0%',
+            25: '25%',
+            50: '50%',
+            75: '75%',
+            100: '100%'
+          }" />
+          <div class="split-ratio-preview">
+            <div class="split-ratio-first" :style="{ width: `${noTextSplitRatio}%` }"></div>
+            <div class="split-ratio-second" :style="{ width: `${100 - noTextSplitRatio}%` }"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="split-actions">
         <n-button @click="cancelSplit">取消</n-button>
-        <n-button type="primary" @click="confirmSplit">确认分割</n-button>
+        <n-button type="primary" @click="confirmSplit" :disabled="!canConfirmSplit">确认分割</n-button>
       </div>
     </n-modal>
 
@@ -138,7 +163,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted, watch, h } from 'vue'
-import { NIcon, NButton, useDialog, NModal, NInput, NCheckbox, NInputNumber } from 'naive-ui'
+import { NIcon, NButton, useDialog, NModal, NInput, NCheckbox, NInputNumber, NSlider } from 'naive-ui'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useProjectStore } from '~/stores/project'
 import { Add as IconAdd, Edit, Delete, MergeCells, Split, More } from '@icon-park/vue-next'
@@ -186,6 +211,7 @@ const splitPosition = ref(0)
 const showSplitModal = ref(false)
 const currentSplitAnnotation = ref<any>(null)
 const previewSplitPosition = ref<number | null>(null)
+const noTextSplitRatio = ref(50) // 无文本标注的分割比例，默认50%
 
 // 预览标注数据
 const previewAnnotation = reactive({
@@ -832,39 +858,86 @@ const handleSplitAnnotation = (annotation: any) => {
 
   // 设置初始值
   splitText.value = annotation.text || ''
-  splitPosition.value = 0 // 初始不选中任何位置
+  if (splitText.value) {
+    // 有文本时默认选中中间
+    splitPosition.value = Math.floor(splitText.value.length / 2) || 1
+  } else {
+    splitPosition.value = 0
+  }
   previewSplitPosition.value = null
+  noTextSplitRatio.value = 50 // 重置无文本分割比例为50%
 
   // 显示分割模态框
   showSplitModal.value = true
 }
 
+// 判断是否可以确认分割
+const canConfirmSplit = computed(() => {
+  if (!currentSplitAnnotation.value) return false
+
+  // 有文本的情况
+  if (splitText.value) {
+    return splitPosition.value >= 0
+  }
+
+  // 无文本的情况，只要设置了比例就可以分割
+  return true
+})
+
 // 确认分割
 const confirmSplit = () => {
   const annotation = currentSplitAnnotation.value
-  if (!annotation || splitPosition.value === 0) return
-
-  // 分割成两个标注
-  const firstPart = splitText.value.substring(0, splitPosition.value)
-  const secondPart = splitText.value.substring(splitPosition.value)
+  if (!annotation) return
 
   // 计算分割时间点
   const timeDuration = annotation.end - annotation.start
-  const splitRatio = splitPosition.value / splitText.value.length
-  const splitTime = annotation.start + (timeDuration * splitRatio)
+  let splitRatio, splitTime: number
+  let firstPart, secondPart: string
 
-  // 更新原标注
-  domAnnotationStore.updateAnnotation(annotation.id, {
-    end: splitTime,
-    text: firstPart
-  })
+  if (splitText.value) {
+    // 有文本内容的情况，需要有分割位置
+    if (splitPosition.value === 0 || splitPosition.value === splitText.value.length) {
+      // 如果分割点在头或尾（即一侧为空），自动对半分
+      splitRatio = 0.5
+    } else {
+      // 普通情况，按字数比例分割成两个标注
+      splitRatio = splitPosition.value / splitText.value.length
+    }
 
-  // 创建新标注
-  domAnnotationStore.createAnnotation({
-    start: splitTime,
-    end: annotation.end,
-    text: secondPart
-  })
+    firstPart = splitText.value.substring(0, splitPosition.value)
+    secondPart = splitText.value.substring(splitPosition.value)
+    splitTime = annotation.start + (timeDuration * splitRatio)
+
+    // 更新原标注
+    domAnnotationStore.updateAnnotation(annotation.id, {
+      end: splitTime,
+      text: firstPart
+    })
+
+    // 创建新标注
+    domAnnotationStore.createAnnotation({
+      start: splitTime,
+      end: annotation.end,
+      text: secondPart
+    })
+  } else {
+    // 无文本内容的情况，使用滑块设置的比例
+    const splitRatio = noTextSplitRatio.value / 100
+    splitTime = annotation.start + (timeDuration * splitRatio)
+
+    // 更新原标注
+    domAnnotationStore.updateAnnotation(annotation.id, {
+      end: splitTime,
+      text: ''
+    })
+
+    // 创建新标注
+    domAnnotationStore.createAnnotation({
+      start: splitTime,
+      end: annotation.end,
+      text: ''
+    })
+  }
 
   // 关闭模态框
   showSplitModal.value = false
@@ -1262,6 +1335,46 @@ const updateResizing = () => {
   line-height: 1.5;
 }
 
+.no-text-split-options {
+  margin: 16px 0;
+  background: #f8f8f8;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.split-ratio-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.split-ratio-label {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 5px;
+}
+
+.split-ratio-preview {
+  height: 30px;
+  display: flex;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.split-ratio-first {
+  background: rgba(103, 194, 58, 0.2);
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.split-ratio-second {
+  background: rgba(230, 162, 60, 0.2);
+  height: 100%;
+  transition: width 0.3s;
+}
+
 .split-text-container {
   position: relative;
   display: flex;
@@ -1278,6 +1391,12 @@ const updateResizing = () => {
   transition: all 0.2s;
   cursor: pointer;
   user-select: none;
+}
+.split-blank {
+  min-width: 8px;
+  height: 2em;
+  background: rgba(103, 194, 58, 0.1);
+  border-right: 1px dashed #eee;
 }
 
 .split-char:hover {
@@ -1447,6 +1566,7 @@ const updateResizing = () => {
   border-radius: 2px;
   pointer-events: none;
 }
+
 .annotation-handle-top.annotation-handle-left {
   border-bottom-right-radius: 50%;
   border-top-left-radius: 4px;
@@ -1466,6 +1586,4 @@ const updateResizing = () => {
   border-top-left-radius: 50%;
   border-bottom-right-radius: 4px;
 }
-
-
 </style>
