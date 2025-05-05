@@ -166,7 +166,7 @@ import { ref, computed, reactive, onMounted, onUnmounted, watch, h } from 'vue'
 import { NIcon, NButton, useDialog, NModal, NInput, NCheckbox, NInputNumber, NSlider } from 'naive-ui'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useProjectStore } from '~/stores/project'
-import { Add as IconAdd, Edit, Delete, MergeCells, Split, More } from '@icon-park/vue-next'
+import { Add as IconAdd, Edit, Delete, MergeCells, Split, More, Scissors } from '@icon-park/vue-next'
 import { useMouseInElement, watchThrottled, useMousePressed, useDebounceFn, useEventListener, useElementSize, useElementBounding } from '@vueuse/core'
 import type { AudioPlayer } from '~/types/audio'
 
@@ -669,7 +669,7 @@ const dropdownOptions = computed(() => {
     {
       label: '分割标注',
       key: 'split',
-      icon: () => h(Split)
+      icon: () => h(Scissors)
     },
     {
       type: 'divider'
