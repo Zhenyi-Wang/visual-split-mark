@@ -426,8 +426,6 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     
     // 更新标注
     updateAnnotation(id: string, data: { start?: number; end?: number; text?: string }) {
-      console.log('updateAnnotation', id, data)
-      
       // 查找现有标注
       const annotation = this.currentAnnotations.find(a => a.id === id)
       
