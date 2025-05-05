@@ -188,7 +188,7 @@ const currentSplitAnnotation = ref<any>(null)
 const previewSplitPosition = ref<number | null>(null)
 
 // 预览标注数据
-const createPreviewAnnotation = reactive({
+const previewAnnotation = reactive({
   start: 0,
   end: 0,
   text: '',
@@ -250,15 +250,6 @@ const { x: mouseX } = useMouseInElement()
 
 // 全局鼠标按下状态
 const { pressed } = useMousePressed()
-
-// 本地鼠标按下状态
-const isMouseDown = ref(false)
-
-// 计算属性：是否处于创建标注的拖拽阶段
-const isCreatingStageDragging = computed(() => annotationState.value === 'creating_drag')
-
-// 计算属性：是否处于创建标注的编辑阶段
-const isCreateAnnotationConfirming = computed(() => annotationState.value === 'creating_edit')
 
 // 计算属性：是否显示预览
 const createPreviewShow = computed(() =>
@@ -322,13 +313,13 @@ const getAnnotationStyle = (annotation: any) => {
 // 获取预览标注样式
 const getPreviewAnnotationStyle = () => {
   const annotation = {
-    ...createPreviewAnnotation
+    ...previewAnnotation
   }
 
   // 如果开始时间大于结束时间，交换它们
   if (annotation.start > annotation.end) {
-    annotation.start = createPreviewAnnotation.end
-    annotation.end = createPreviewAnnotation.start
+    annotation.start = previewAnnotation.end
+    annotation.end = previewAnnotation.start
   }
 
   // 如果开始时间等于结束时间，增加0.1秒
@@ -342,10 +333,10 @@ const getPreviewAnnotationStyle = () => {
 // 开始创建标注
 const handleAddAnnotationClick = (direction: AddDirection = 'normal') => {
   domAnnotationStore.setAnnotationState('creating_drag')
-  createPreviewAnnotation.text = ''
-  createPreviewAnnotation.id = null
-  createPreviewAnnotation.start = currentPlayTime.value
-  createPreviewAnnotation.end = getTimeFromPx(mouseX.value)
+  previewAnnotation.text = ''
+  previewAnnotation.id = null
+  previewAnnotation.start = currentPlayTime.value
+  previewAnnotation.end = getTimeFromPx(mouseX.value)
   addDirection.value = direction // 保存添加方向
 }
 
@@ -353,17 +344,17 @@ const handleAddAnnotationClick = (direction: AddDirection = 'normal') => {
 const handleResizeStart = (annotation: any, direction: 'left' | 'right', isLinked: boolean = false, event: MouseEvent) => {
   // 阻止事件冒泡，避免触发标注点击事件
   // event.stopPropagation();
-  
+
   // 设置本地鼠标按下状态
   // isMouseDown.value = true;
-  
+
   // 调用原来的调整大小函数
   startResizing(annotation, direction, isLinked);
-  
+
   // // 添加全局鼠标抬起事件监听
   // const handleMouseUp = () => {
   //   isMouseDown.value = false;
-    
+
   //   // 完成调整大小，回到空闲状态
   //   if (annotationState.value === 'resizing') {
   //     domAnnotationStore.setAnnotationState('idle');
@@ -378,11 +369,11 @@ const handleResizeStart = (annotation: any, direction: 'left' | 'right', isLinke
   //       });
   //     }
   //   }
-    
+
   //   // 移除事件监听
   //   window.removeEventListener('mouseup', handleMouseUp);
   // };
-  
+
   // // 添加一次性事件监听
   // window.addEventListener('mouseup', handleMouseUp, { once: true });
 }
@@ -397,10 +388,10 @@ const startResizing = (annotation: any, direction: 'left' | 'right', isLinked: b
   selectedOrHoveredAnnotation.value = annotation
 
   // 设置预览标注数据
-  createPreviewAnnotation.start = annotation.start
-  createPreviewAnnotation.end = annotation.end
-  createPreviewAnnotation.text = annotation.text
-  createPreviewAnnotation.id = annotation.id
+  previewAnnotation.start = annotation.start
+  previewAnnotation.end = annotation.end
+  previewAnnotation.text = annotation.text
+  previewAnnotation.id = annotation.id
 
   // 保存是否为联动操作
   isLinkedResize.value = isLinked
@@ -420,10 +411,10 @@ const startResizing = (annotation: any, direction: 'left' | 'right', isLinked: b
 // 开始编辑标注文本
 const startEditingText = (annotation: any) => {
   domAnnotationStore.setAnnotationState('editing_text')
-  createPreviewAnnotation.start = annotation.start
-  createPreviewAnnotation.end = annotation.end
-  createPreviewAnnotation.text = annotation.text
-  createPreviewAnnotation.id = annotation.id
+  previewAnnotation.start = annotation.start
+  previewAnnotation.end = annotation.end
+  previewAnnotation.text = annotation.text
+  previewAnnotation.id = annotation.id
 
   // 设置模态框数据
   modalAnnotation.id = annotation.id
@@ -540,69 +531,63 @@ const cancelAnnotation = () => {
 
 // 监听鼠标按下状态变化
 watch(pressed, (isPressed) => {
-  console.log(isPressed, domAnnotationStore.annotationState)
-  if (!isPressed) {
-    // 鼠标释放
-    if (annotationState.value === 'creating_drag') {
-      // 从拖拽状态切换到编辑状态
-      domAnnotationStore.setAnnotationState('creating_edit')
+  // 忽略按下事件
+  if (isPressed) return
 
-      // 设置模态框数据
-      modalAnnotation.id = null
-      modalAnnotation.start = Math.min(createPreviewAnnotation.start, createPreviewAnnotation.end)
-      modalAnnotation.end = Math.max(createPreviewAnnotation.start, createPreviewAnnotation.end)
-      modalAnnotation.text = ''
+  if (annotationState.value === 'creating_drag') {
+    // 创建标注时释放，从拖拽状态切换到编辑状态
+    domAnnotationStore.setAnnotationState('creating_edit')
 
-      // 标记为创建新标注
-      isEditingExisting.value = false
+    // 设置模态框数据
+    modalAnnotation.id = null
+    modalAnnotation.start = Math.min(previewAnnotation.start, previewAnnotation.end)
+    modalAnnotation.end = Math.max(previewAnnotation.start, previewAnnotation.end)
+    modalAnnotation.text = ''
 
-      // 显示模态框
-      showAnnotationModal.value = true
+    // 标记为创建新标注
+    isEditingExisting.value = false
 
-      // 聚焦输入框
-      setTimeout(() => {
-        const textarea = document.querySelector('.modal-annotation-input')
-        if (textarea) {
-          (textarea as HTMLTextAreaElement).focus()
-        }
-      }, 50)
-    } else if (annotationState.value === 'resizing') {
-      // 完成调整大小，回到空闲状态
-      domAnnotationStore.setAnnotationState('idle')
-      domAnnotationStore.setResizing(false, null)
-      resizeDirection.value = null
+    // 显示模态框
+    showAnnotationModal.value = true
 
-      // 更新当前标注大小
-      if (createPreviewAnnotation.id) {
-        domAnnotationStore.updateAnnotation(createPreviewAnnotation.id, {
-          start: createPreviewAnnotation.start,
-          end: createPreviewAnnotation.end
-        })
-        
-        // 如果是联动调整，同时更新相邻标注
-        if (isLinkedResize.value && linkedAnnotation.value) {
-          const updateData: any = {}
-          
-          if (linkedAnnotation.value._tempStart !== undefined) {
-            updateData.start = linkedAnnotation.value._tempStart
-            delete linkedAnnotation.value._tempStart
-          }
-          
-          if (linkedAnnotation.value._tempEnd !== undefined) {
-            updateData.end = linkedAnnotation.value._tempEnd
-            delete linkedAnnotation.value._tempEnd
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            domAnnotationStore.updateAnnotation(linkedAnnotation.value.id, updateData)
-          }
-        }
+    // 聚焦输入框
+    setTimeout(() => {
+      const textarea = document.querySelector('.modal-annotation-input')
+      if (textarea) {
+        (textarea as HTMLTextAreaElement).focus()
       }
-      
-      // 重置联动状态
-      isLinkedResize.value = false
-      linkedAnnotation.value = null
+    }, 50)
+  } else if (annotationState.value === 'resizing') {
+    // 调整大小时释放，完成调整大小，回到空闲状态
+    domAnnotationStore.setAnnotationState('idle')
+    domAnnotationStore.setResizing(false, null)
+
+    // 更新当前标注大小
+    if (previewAnnotation.id) {
+      domAnnotationStore.updateAnnotation(previewAnnotation.id, {
+        start: previewAnnotation.start,
+        end: previewAnnotation.end
+      })
+
+      // 如果是联动调整，同时更新相邻标注
+      if (isLinkedResize.value && linkedAnnotation.value) {
+        const updateData: any = {}
+
+        if (resizeDirection.value === 'left') {
+          updateData.end = previewAnnotation.start
+        } else {
+          updateData.start = previewAnnotation.end
+        }
+
+        domAnnotationStore.updateAnnotation(linkedAnnotation.value.id, updateData)
+      }
     }
+
+    resizeDirection.value = null
+
+    // 重置联动状态
+    isLinkedResize.value = false
+    linkedAnnotation.value = null
   }
 })
 
@@ -933,7 +918,7 @@ const handleDeleteClick = (annotation: any) => {
   })
 }
 
-// 更新拖拽中的标注
+// 更新拖拽中的标注（新建时）
 const updateDragging = () => {
   const relativeX = mouseX.value - containerX.value
   console.log('relativeX', relativeX, mouseX.value, containerX.value)
@@ -942,8 +927,8 @@ const updateDragging = () => {
   const time = getTimeFromPx(relativeX)
 
   let minTime, maxTime
-  const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(createPreviewAnnotation.end)
-  const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.start)
+  const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(previewAnnotation.end)
+  const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(previewAnnotation.start)
 
   // 根据不同的添加方向设置不同的边界限制
   switch (addDirection.value) {
@@ -987,18 +972,7 @@ const updateDragging = () => {
   }
 
   // 限制结束时间在有效范围内
-  createPreviewAnnotation.end = Math.min(Math.max(time, minTime), maxTime)
-
-  console.log('拖拽范围限制', {
-    time,
-    minTime,
-    maxTime,
-    viewStart: viewStartTime.value,
-    viewEnd: viewEndTime.value,
-    prevEnd: domAnnotationStore.getPreviousAnnotationEndTime(createPreviewAnnotation.start),
-    nextStart: domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.start),
-    direction: addDirection.value
-  })
+  previewAnnotation.end = Math.min(Math.max(time, minTime), maxTime)
 }
 
 // 更新调整大小中的标注
@@ -1011,66 +985,55 @@ const updateResizing = () => {
 
   if (!direction) return
 
-  // 获取相邻标注的边界限制
-  const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(createPreviewAnnotation.id as any)
-  const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(createPreviewAnnotation.id as any)
-
   // 根据方向和是否联动更新标注
   if (direction === 'left') {
     if (isLinkedResize.value && linkedAnnotation.value) {
       // 联动拖动左边界
       // 左极限: 最大值(视口左边界, 左边标注的开始时间)
       // 右极限: 最小值(视口右边界, 右边标注的结束时间)
-      const minTime = Math.max(viewStartTime.value, linkedAnnotation.value.start)
-      const maxTime = Math.min(viewEndTime.value, createPreviewAnnotation.end - 0.1)
-      
+      const minTime = Math.max(viewStartTime.value, linkedAnnotation.value.start + 0.1)
+      const maxTime = Math.min(viewEndTime.value, previewAnnotation.end - 0.1)
+
       // 限制在有效范围内
       const newStart = Math.max(minTime, Math.min(maxTime, time))
-      createPreviewAnnotation.start = newStart
-      
-      // 临时存储相邻标注的新结束时间，但不立即更新到store
-      if (!linkedAnnotation.value._tempEnd) {
-        linkedAnnotation.value._tempEnd = linkedAnnotation.value.end
-      }
-      linkedAnnotation.value._tempEnd = newStart
+      previewAnnotation.start = newStart
     } else {
       // 单独拖动左边界
+
+      // 获取相邻标注的边界限制
+      const prevAnnotationEnd = domAnnotationStore.getPreviousAnnotationEndTime(selectedOrHoveredAnnotation.value.start as any)
+
       // 左极限: 最大值(视口左边界, 前一个标注的结束时间)
       // 右极限: 最小值(视口右边界, 自身结束时间-0.1)
       const minTime = Math.max(viewStartTime.value, prevAnnotationEnd)
-      const maxTime = Math.min(viewEndTime.value, createPreviewAnnotation.end - 0.1)
-      
+      const maxTime = Math.min(viewEndTime.value, previewAnnotation.end - 0.1)
+
       // 限制在有效范围内
       const newStart = Math.max(minTime, Math.min(maxTime, time))
-      createPreviewAnnotation.start = newStart
+      previewAnnotation.start = newStart
     }
   } else {
     if (isLinkedResize.value && linkedAnnotation.value) {
       // 联动拖动右边界
       // 左极限: 最大值(视口左边界, 左边标注的开始时间)
       // 右极限: 最小值(视口右边界, 右边标注的结束时间)
-      const minTime = Math.max(viewStartTime.value, createPreviewAnnotation.start + 0.1)
+      const minTime = Math.max(viewStartTime.value, previewAnnotation.start + 0.1)
       const maxTime = Math.min(viewEndTime.value, linkedAnnotation.value.end)
-      
+
       // 限制在有效范围内
       const newEnd = Math.max(minTime, Math.min(maxTime, time))
-      createPreviewAnnotation.end = newEnd
-      
-      // 临时存储相邻标注的新开始时间，但不立即更新到store
-      if (!linkedAnnotation.value._tempStart) {
-        linkedAnnotation.value._tempStart = linkedAnnotation.value.start
-      }
-      linkedAnnotation.value._tempStart = newEnd
+      previewAnnotation.end = newEnd
     } else {
       // 单独拖动右边界
+      const nextAnnotationStart = domAnnotationStore.getNextAnnotationStartTime(selectedOrHoveredAnnotation.value.end)
       // 左极限: 最大值(视口左边界, 自身开始时间+0.1)
       // 右极限: 最小值(视口右边界, 下一个标注的开始时间)
-      const minTime = Math.max(viewStartTime.value, createPreviewAnnotation.start + 0.1)
+      const minTime = Math.max(viewStartTime.value, previewAnnotation.start + 0.1)
       const maxTime = Math.min(viewEndTime.value, nextAnnotationStart)
-      
+
       // 限制在有效范围内
       const newEnd = Math.max(minTime, Math.min(maxTime, time))
-      createPreviewAnnotation.end = newEnd
+      previewAnnotation.end = newEnd
     }
   }
 }
@@ -1500,6 +1463,7 @@ const updateResizing = () => {
 /* 联动操作杆特殊鼠标样式 */
 .annotation-handle-top.annotation-handle-left,
 .annotation-handle-top.annotation-handle-right {
-  cursor: ew-resize; /* 或者使用特殊指针 */
+  cursor: ew-resize;
+  /* 或者使用特殊指针 */
 }
 </style>
