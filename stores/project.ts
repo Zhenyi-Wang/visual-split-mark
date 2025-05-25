@@ -538,8 +538,9 @@ export const useProjectStore = defineStore('project', {
 
     async createAnnotation(annotationData: { start: number; end: number; text: string }) {
       this.updateAnnotation({
-        ...annotationData, id: crypto.randomUUID(),
-        audioFileId: '',
+        ...annotationData,
+        id: crypto.randomUUID(),
+        audioFileId: this.currentAudioFile?.id || '',
         createdAt: new Date(),
         updatedAt: new Date()
       })
