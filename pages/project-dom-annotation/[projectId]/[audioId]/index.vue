@@ -355,13 +355,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useProjectStore } from '~/stores/project'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import { useAudioPlayer } from '~/composables/useAudioPlayer'
 import { useExport } from '~/composables/useExport'
+import { useThrottleFn } from '@vueuse/core'
 import { loadAudioBlobWithProgress } from '~/utils/file'
 import WaveformDOMCanvas from '~/components/WaveformDOMCanvas.vue'
 import TimeRangeSelectorDOM from '~/components/TimeRangeSelectorDOM.vue'
@@ -382,6 +383,42 @@ const message = useMessage()
 const projectStore = useProjectStore()
 const domAnnotationStore = useDOMAnnotationStore()
 const audioPlayer = useAudioPlayer()
+
+// 视口状态存储相关函数
+const getViewportStorageKey = (): string => {
+  const projectId = route.params.projectId as string
+  const audioId = route.params.audioId as string
+  return `domViewportState-${projectId}-${audioId}`
+}
+
+const saveViewportState = () => {
+  if (!domAnnotationStore.currentAudioFile) return // 确保音频文件已加载，避免无效保存
+
+  const stateToSave = {
+    startTime: domAnnotationStore.viewportState.startTime,
+    endTime: domAnnotationStore.viewportState.endTime,
+    pixelsPerSecond: domAnnotationStore.viewportState.pixelsPerSecond,
+  }
+  localStorage.setItem(getViewportStorageKey(), JSON.stringify(stateToSave))
+  // console.log('视口状态已保存:', stateToSave) // 调试用
+}
+
+// 使用节流函数避免频繁保存
+const throttledSaveViewportState = useThrottleFn(saveViewportState, 500) // 每500ms最多保存一次
+
+// 监听视口状态变化以保存
+watch(
+  () => domAnnotationStore.viewportState,
+  () => {
+    throttledSaveViewportState()
+  },
+  { deep: true }
+)
+
+// 组件卸载前确保最后的状态被保存
+onBeforeUnmount(() => {
+  saveViewportState() // 直接保存，不节流
+})
 
 // 引用和状态变量
 const scrollContainerRef = ref<HTMLElement | null>(null)
@@ -744,11 +781,53 @@ onMounted(async () => {
       loadingProgress.value = 90
       domAnnotationStore.cacheWaveformData(channelData, audioPlayer.audioContext.value?.sampleRate || 44100, audioPlayer.duration.value)
 
-      // 设置初始视口范围 - 显示前30秒，或整个音频（如果少于30秒）
+      // 尝试恢复保存的视口状态
+      loadingStatus.value = '正在恢复视口状态...'
+      loadingProgress.value = 95
+      
+      // 尝试从本地存储恢复视口状态
+      const savedStateJSON = localStorage.getItem(getViewportStorageKey())
+      let viewportRestored = false
+      
+      if (savedStateJSON) {
+        try {
+          const savedState = JSON.parse(savedStateJSON)
+          if (
+            typeof savedState.startTime === 'number' &&
+            typeof savedState.endTime === 'number' &&
+            typeof savedState.pixelsPerSecond === 'number' &&
+            savedState.endTime > savedState.startTime // 基本的有效性检查
+          ) {
+            // 确保恢复的值在合理范围内
+            const duration = audioPlayer.duration.value;
+            const validStartTime = Math.max(0, Math.min(savedState.startTime, duration));
+            const validEndTime = Math.max(validStartTime + 0.1, Math.min(savedState.endTime, duration));
+            const validPixelsPerSecond = Math.max(1, savedState.pixelsPerSecond); // 假设最小1px/s
+            
+            if (validEndTime > validStartTime) {
+              // 先设置缩放级别，再设置视口范围
+              domAnnotationStore.viewportState.pixelsPerSecond = validPixelsPerSecond;
+              domAnnotationStore.moveAndZoomView(validStartTime, validEndTime);
+              console.log('已恢复视口状态:', { validStartTime, validEndTime, validPixelsPerSecond });
+              viewportRestored = true;
+            }
+          }
+        } catch (e) {
+          console.error('解析或应用保存的视口状态失败:', e)
+          localStorage.removeItem(getViewportStorageKey()) // 清除无效数据
+        }
+      }
+      
+      // 如果没有恢复视口状态，则设置默认视口范围
+      if (!viewportRestored) {
+        // 设置初始视口范围 - 显示前30秒，或整个音频（如果少于30秒）
+        console.log('使用默认视口范围')
+        const initialDuration = Math.min(30, audioPlayer.duration.value)
+        domAnnotationStore.moveAndZoomView(0, initialDuration)
+      }
+      
       loadingStatus.value = '加载完成'
       loadingProgress.value = 100
-      const initialDuration = Math.min(30, audioPlayer.duration.value)
-      domAnnotationStore.moveAndZoomView(0, initialDuration)
     } catch (error) {
       console.error('音频文件加载失败:', error)
       message.error('音频文件加载失败，请重试')
