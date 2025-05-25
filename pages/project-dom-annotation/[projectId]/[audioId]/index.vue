@@ -5,7 +5,15 @@
       <n-page-header @back="handleBack">
         <template #title>
           <n-space align="center">
-            <span>DOM标注 - {{ currentAudioFile?.originalName || '音频文件' }}</span>
+            <span>{{ currentAudioFile?.originalName || '音频文件' }}</span>
+            <n-text
+              class="note-text"
+              :depth="3"
+              style="font-size: 13px; cursor: pointer"
+              @click="handleEditNote"
+            >
+              {{ currentAudioFile?.note || '无备注' }}
+            </n-text>
           </n-space>
         </template>
         <template #extra>
@@ -352,6 +360,22 @@
     </template>
   </n-modal>
 
+  <!-- 添加备注编辑对话框 -->
+  <n-modal v-model:show="showNoteModal" preset="dialog" title="编辑备注">
+    <n-input
+      v-model:value="noteText"
+      type="textarea"
+      placeholder="请输入备注"
+      :autosize="{ minRows: 3, maxRows: 5 }"
+    />
+    <template #action>
+      <n-space>
+        <n-button @click="showNoteModal = false">取消</n-button>
+        <n-button type="primary" @click="handleSaveNote">保存</n-button>
+      </n-space>
+    </template>
+  </n-modal>
+
 </template>
 
 <script setup lang="ts">
@@ -528,6 +552,33 @@ const showClearAllModal = ref(false)
 // 添加清除所有标注的处理函数
 const handleClearAll = () => {
   showClearAllModal.value = true
+}
+
+// 添加备注相关的状态
+const showNoteModal = ref(false)
+const noteText = ref('')
+
+// 添加编辑备注的处理函数
+const handleEditNote = () => {
+  noteText.value = currentAudioFile.value?.note || ''
+  showNoteModal.value = true
+}
+
+// 添加保存备注的处理函数
+const handleSaveNote = async () => {
+  if (!currentAudioFile.value) return
+
+  try {
+    await projectStore.updateAudioFile({
+      ...currentAudioFile.value,
+      note: noteText.value,
+      updatedAt: new Date(),
+    })
+    showNoteModal.value = false
+    message.success('备注已更新')
+  } catch (error) {
+    message.error('更新备注失败')
+  }
 }
 
 const { transcribe } = useWhisper()
@@ -773,8 +824,26 @@ onMounted(async () => {
       if (audioFile.duration !== audioPlayer.duration.value) {
         console.warn(`实际音频时长${audioPlayer.duration.value}秒与项目中的时长${audioFile.duration}秒不一致，音频id:${audioFile.id}`)
         console.warn(`更新项目中的音频时长`)
+        
+        // 更新本地变量中的时长
+        audioFile.duration = audioPlayer.duration.value
+        
+        // 将更新后的音频文件信息保存到持久化存储中
+        try {
+          await projectStore.updateAudioFile({
+            ...audioFile,
+            duration: audioPlayer.duration.value,
+            updatedAt: new Date()
+          })
+          message.success('音频时长已更新')
+        } catch (error) {
+          console.error('更新音频时长失败:', error)
+          message.error('更新音频时长失败')
+        }
+      } else {
+        // 时长一致，不需要更新
+        audioFile.duration = audioPlayer.duration.value
       }
-      audioFile.duration = audioPlayer.duration.value
 
       // 缓存音频数据
       loadingStatus.value = '正在生成波形图...'
@@ -940,7 +1009,7 @@ const handleBack = () => {
 
 // 页面标题设置
 useHead({
-  title: computed(() => `DOM标注 - ${currentAudioFile.value?.originalName || '音频文件'} - Visual Split Mark`),
+  title: computed(() => `${currentAudioFile.value?.originalName || '音频文件'} - Visual Split Mark`),
 })
 </script>
 
@@ -1075,5 +1144,16 @@ useHead({
 
 .no-select {
   user-select: none
+}
+
+.note-text {
+  position: relative;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.note-text:hover {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 </style>
