@@ -76,7 +76,7 @@ export default defineEventHandler(async (event) => {
         if (code === 0) {
           // 发送 100% 进度
           progressEmitter.emit('progress', fileId, 100)
-          resolve({ success: true })
+          resolve({ success: true, duration: duration })
         } else {
           reject(new Error('FFmpeg conversion failed'))
         }

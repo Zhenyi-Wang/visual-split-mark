@@ -321,7 +321,7 @@ const handleFileUpload = async (data: {
     }
 
     // 开始转换
-    await $fetch('/api/file/convert', {
+    const convertResult = await $fetch<{ success: boolean, duration?: number }>('/api/file/convert', {
       method: 'POST',
       body: {
         inputPath: paths.ORIGINAL,
@@ -333,6 +333,9 @@ const handleFileUpload = async (data: {
     // 更新状态
     if (newAudioFile) {
       newAudioFile.status = 'ready'
+      if (convertResult && convertResult.success && typeof convertResult.duration === 'number') {
+        newAudioFile.duration = convertResult.duration
+      }
       await projectStore.updateAudioFile(newAudioFile)
     }
 
