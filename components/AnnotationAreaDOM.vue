@@ -1002,7 +1002,7 @@ const handleDeleteClick = (annotation: any) => {
 // 更新拖拽中的标注（新建时）
 const updateDragging = () => {
   const relativeX = mouseX.value - containerX.value
-  console.log('relativeX', relativeX, mouseX.value, containerX.value)
+  // console.log('relativeX', relativeX, mouseX.value, containerX.value)
 
   // 计算时间点
   const time = getTimeFromPx(relativeX)

@@ -795,7 +795,7 @@ onMounted(async () => {
 
           // 如果接近右边缘，跳转视图，使播放头位于视图左侧10%位置
           if (time > endTime - rightEdgeThreshold) {
-            console.log('播放头接近右边缘，重新定位视图')
+            // console.log('播放头接近右边缘，重新定位视图')
 
             // 计算新的起始时间，使播放头位于视图左侧10%位置
             let newStartTime = time - viewDuration * 0.1
@@ -939,7 +939,7 @@ onUnmounted(() => {
 // 播放控制函数
 const togglePlay = async () => {
   await audioPlayer.playPause()
-  console.log('播放状态:', audioPlayer.isPlaying.value, domAnnotationStore.playbackState.isPlaying)
+  // console.log('播放状态:', audioPlayer.isPlaying.value, domAnnotationStore.playbackState.isPlaying)
 }
 
 // 处理键盘事件
