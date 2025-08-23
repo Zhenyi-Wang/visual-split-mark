@@ -12,6 +12,7 @@ export function useAudioPlayer() {
   const duration = ref(0)
   const currentTime = ref(0)
   const playbackRate = ref(1)
+  const volume = ref(1)
   let channelData: Float32Array | null = null
   
   // 新增状态
@@ -106,6 +107,12 @@ export function useAudioPlayer() {
     audioElement.value.playbackRate = rate
   }
 
+  const setVolume = (vol: number) => {
+    if (!audioElement.value) return
+    volume.value = vol
+    audioElement.value.volume = vol
+  }
+
   const destroy = () => {
     if (audioContext.value) {
       audioContext.value.close()
@@ -129,6 +136,7 @@ export function useAudioPlayer() {
     duration,
     currentTime,
     playbackRate,
+    volume,
     channelData,
     // 新增返回值
     loadingPhase,
@@ -137,6 +145,7 @@ export function useAudioPlayer() {
     playPause,
     seek,
     setPlaybackRate,
+    setVolume,
     destroy
   }
 } 

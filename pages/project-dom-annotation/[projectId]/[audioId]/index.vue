@@ -77,6 +77,22 @@
 
             <n-divider vertical style="height: 24px; margin: 5px 0" />
 
+            <!-- 音量控制 -->
+            <n-space align="center">
+              <n-text style="line-height: 34px">音量:</n-text>
+              <n-slider
+                v-model:value="volume"
+                :min="0"
+                :max="100"
+                :step="1"
+                style="width: 120px"
+                @update:value="handleVolumeChange"
+              />
+              <n-text style="padding: 0 8px; line-height: 34px">{{ volume }}%</n-text>
+            </n-space>
+
+            <n-divider vertical style="height: 24px; margin: 5px 0" />
+
             <!-- 缩放控制 -->
             <n-space align="center">
               <n-text style="line-height: 34px">缩放控制:</n-text>
@@ -451,6 +467,7 @@ const loadingProgress = ref(0)
 const loadingStatus = ref('正在初始化...')
 const playbackRate = ref(1.0)
 const isPlaying = ref(false)
+const volume = ref(100)
 let playheadUpdateTimer: number | null = null
 const transcribing = ref(false)
 const showExportModal = ref(false)
@@ -818,6 +835,11 @@ onMounted(async () => {
         domAnnotationStore.setPlaybackRate(rate)
       })
 
+      // 监听音量变化
+      watch(audioPlayer.volume, (vol) => {
+        volume.value = Math.round(vol * 100)
+      })
+
       // 更新音频文件时长（如果与实际不符）
       loadingStatus.value = '正在处理波形数据...'
       loadingProgress.value = 85
@@ -963,6 +985,11 @@ const handleKeydown = (event: KeyboardEvent) => {
 const changePlaybackRate = (delta: number) => {
   const newRate = Math.max(0.5, Math.min(2.0, playbackRate.value + delta))
   audioPlayer.setPlaybackRate(newRate)
+}
+
+// 调整音量
+const handleVolumeChange = (value: number) => {
+  audioPlayer.setVolume(value / 100)
 }
 
 // 波形图组件点击跳转

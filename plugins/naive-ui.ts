@@ -43,7 +43,8 @@ import {
   NSpin,
   NDescriptions,
   NDescriptionsItem,
-  NAlert
+  NAlert,
+  NSlider
 } from 'naive-ui'
 
 // 导入图标组件
@@ -92,7 +93,8 @@ export default defineNuxtPlugin((nuxtApp) => {
       NSpin,
       NDescriptions,
       NDescriptionsItem,
-      NAlert
+      NAlert,
+      NSlider
     ]
   })
 
