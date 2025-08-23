@@ -790,6 +790,34 @@ onMounted(async () => {
       loadingProgress.value = 40
       console.log('开始加载音频文件:', audioFile.wavPath)
 
+      // 监听音频播放器进度变化
+      watch(audioPlayer.loadingProgress, (progress) => {
+        // 根据加载阶段计算总进度
+        const phase = audioPlayer.loadingPhase.value
+        let totalProgress = 0
+        
+        if (phase === 'downloading') {
+          // 下载阶段：0-50%
+          totalProgress = 40 + (progress * 0.5) // 从40%开始，到90%结束
+        } else if (phase === 'decoding') {
+          // 解码阶段：50-100%
+          totalProgress = 40 + 50 + (progress * 0.1) // 从90%开始，到100%结束
+        } else if (phase === 'ready') {
+          totalProgress = 100
+        }
+        
+        loadingProgress.value = Math.round(totalProgress)
+        
+        // 更新状态文本
+        if (phase === 'downloading') {
+          loadingStatus.value = `正在下载音频文件... ${Math.round(progress)}%`
+        } else if (phase === 'decoding') {
+          loadingStatus.value = `正在解码音频... ${Math.round(progress)}%`
+        } else if (phase === 'ready') {
+          loadingStatus.value = '加载完成'
+        }
+      })
+
       // 初始化音频播放器
       const channelData = await audioPlayer.initialize(audioFile)
 
@@ -843,8 +871,6 @@ onMounted(async () => {
       })
 
       // 更新音频文件时长（如果与实际不符）
-      loadingStatus.value = '正在处理波形数据...'
-      loadingProgress.value = 85
       if (audioFile.duration !== audioPlayer.duration.value) {
         console.warn(`实际音频时长${audioPlayer.duration.value}秒与项目中的时长${audioFile.duration}秒不一致，音频id:${audioFile.id}`)
         console.warn(`更新项目中的音频时长`)
@@ -870,13 +896,9 @@ onMounted(async () => {
       }
 
       // 缓存音频数据
-      loadingStatus.value = '正在生成波形图...'
-      loadingProgress.value = 90
       domAnnotationStore.cacheWaveformData(channelData, audioPlayer.audioContext.value?.sampleRate || 44100, audioPlayer.duration.value)
 
       // 尝试恢复保存的视口状态
-      loadingStatus.value = '正在恢复视口状态...'
-      loadingProgress.value = 95
       
       // 清除之前保存的错误数据（临时调试用）
       // localStorage.removeItem(getViewportStorageKey())
@@ -927,8 +949,10 @@ onMounted(async () => {
         domAnnotationStore.moveAndZoomView(0, initialDuration)
       }
       
+      // 音频加载完成后的最终处理
       loadingStatus.value = '加载完成'
       loadingProgress.value = 100
+      
     } catch (error) {
       console.error('音频文件加载失败:', error)
       message.error('音频文件加载失败，请重试')
