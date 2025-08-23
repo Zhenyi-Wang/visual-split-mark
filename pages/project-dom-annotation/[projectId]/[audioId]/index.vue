@@ -438,6 +438,7 @@ const saveViewportState = () => {
     startTime: domAnnotationStore.viewportState.startTime,
     endTime: domAnnotationStore.viewportState.endTime,
     pixelsPerSecond: domAnnotationStore.viewportState.pixelsPerSecond,
+    volume: audioPlayer.volume.value,
   }
   localStorage.setItem(getViewportStorageKey(), JSON.stringify(stateToSave))
 }
@@ -837,6 +838,8 @@ onMounted(async () => {
       // 监听音量变化
       watch(audioPlayer.volume, (vol) => {
         volume.value = Math.round(vol * 100)
+        // 音量变化时保存视口状态
+        throttledSaveViewportState()
       })
 
       // 更新音频文件时长（如果与实际不符）
@@ -902,6 +905,12 @@ onMounted(async () => {
               domAnnotationStore.viewportState.pixelsPerSecond = validPixelsPerSecond;
               domAnnotationStore.moveAndZoomView(validStartTime, validEndTime);
               viewportRestored = true;
+              
+              // 恢复音量设置
+              if (typeof savedState.volume === 'number' && savedState.volume >= 0 && savedState.volume <= 1) {
+                audioPlayer.setVolume(savedState.volume);
+                volume.value = Math.round(savedState.volume * 100);
+              }
             }
           }
         } catch (e) {
