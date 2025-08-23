@@ -439,6 +439,7 @@ const saveViewportState = () => {
     endTime: domAnnotationStore.viewportState.endTime,
     pixelsPerSecond: domAnnotationStore.viewportState.pixelsPerSecond,
     volume: audioPlayer.volume.value,
+    currentTime: audioPlayer.currentTime.value, // 保存当前播放进度位置
   }
   localStorage.setItem(getViewportStorageKey(), JSON.stringify(stateToSave))
 }
@@ -830,6 +831,9 @@ onMounted(async () => {
       // 监听当前播放时间变化
       watch(audioPlayer.currentTime, (time) => {
         domAnnotationStore.setCurrentTime(time)
+        
+        // 播放时间变化时保存视口状态（节流）
+        throttledSaveViewportState()
 
         // 自动跟随模式：当播放头接近视口边缘时自动滚动
         if (isPlaying.value) {
@@ -932,6 +936,11 @@ onMounted(async () => {
               if (typeof savedState.volume === 'number' && savedState.volume >= 0 && savedState.volume <= 1) {
                 audioPlayer.setVolume(savedState.volume);
                 volume.value = Math.round(savedState.volume * 100);
+              }
+              
+              // 恢复播放进度位置
+              if (typeof savedState.currentTime === 'number' && savedState.currentTime >= 0 && savedState.currentTime <= duration) {
+                audioPlayer.seek(savedState.currentTime);
               }
             }
           }
