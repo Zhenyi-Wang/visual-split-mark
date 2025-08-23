@@ -345,11 +345,12 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
     
     // 改变容器宽度
     changeContainerWidth(width: number) {
+      const oldWidth = this.viewportState.containerWidth
       this.viewportState.containerWidth = width
-      // 重新计算结束时间
-      const viewDurationTime = width / this.viewportState.pixelsPerSecond
-      this.viewportState.endTime = this.viewportState.startTime + viewDurationTime
-      this.viewportState.viewportRatio.end = this.viewportState.endTime / this.audioDuration
+      
+      // 保持相同的视口时间范围，只调整像素密度
+      const viewDuration = this.viewportState.endTime - this.viewportState.startTime
+      this.viewportState.pixelsPerSecond = width / viewDuration
     },
     
     // 选择标注

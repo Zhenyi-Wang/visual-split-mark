@@ -440,7 +440,6 @@ const saveViewportState = () => {
     pixelsPerSecond: domAnnotationStore.viewportState.pixelsPerSecond,
   }
   localStorage.setItem(getViewportStorageKey(), JSON.stringify(stateToSave))
-  // console.log('视口状态已保存:', stateToSave) // 调试用
 }
 
 // 使用节流函数避免频繁保存
@@ -876,6 +875,9 @@ onMounted(async () => {
       loadingStatus.value = '正在恢复视口状态...'
       loadingProgress.value = 95
       
+      // 清除之前保存的错误数据（临时调试用）
+      // localStorage.removeItem(getViewportStorageKey())
+      
       // 尝试从本地存储恢复视口状态
       const savedStateJSON = localStorage.getItem(getViewportStorageKey())
       let viewportRestored = false
@@ -899,7 +901,6 @@ onMounted(async () => {
               // 先设置缩放级别，再设置视口范围
               domAnnotationStore.viewportState.pixelsPerSecond = validPixelsPerSecond;
               domAnnotationStore.moveAndZoomView(validStartTime, validEndTime);
-              console.log('已恢复视口状态:', { validStartTime, validEndTime, validPixelsPerSecond });
               viewportRestored = true;
             }
           }
