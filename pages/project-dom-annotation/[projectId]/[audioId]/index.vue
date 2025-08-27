@@ -26,6 +26,10 @@
               :disabled="!currentProject?.whisperApiUrl">
               识别文本
             </n-button>
+            <n-button type="info" ghost @click="showFindReplaceModal = true"
+              :disabled="!domAnnotationStore.currentAnnotations.length">
+              批量替换
+            </n-button>
             <n-button type="primary" ghost @click="showExportModal = true"
               :disabled="!domAnnotationStore.currentAnnotations.length">
               导出数据集
@@ -392,6 +396,95 @@
     </template>
   </n-modal>
 
+  <!-- 批量查找替换对话框 -->
+  <n-modal v-model:show="showFindReplaceModal" preset="card" title="批量查找替换" style="width: 600px" :closable="true"
+    :mask-closable="false">
+    <n-space vertical>
+      <n-alert type="info" :show-icon="true">
+        <template #header>
+          <span style="font-weight: 500">批量文本替换</span>
+        </template>
+        此功能可以帮助您快速修正 Whisper 转录中的常见错误，如人名、地名等专有名词的识别错误。
+      </n-alert>
+
+      <n-form :model="findReplaceForm" label-placement="left" label-width="80px">
+        <n-form-item label="查找文本">
+          <n-input
+            v-model:value="findReplaceForm.findText"
+            placeholder="请输入要查找的文本"
+            :disabled="findReplaceProcessing"
+          />
+        </n-form-item>
+        
+        <n-form-item label="替换为">
+          <n-input
+            v-model:value="findReplaceForm.replaceText"
+            placeholder="请输入替换后的文本"
+            :disabled="findReplaceProcessing"
+          />
+        </n-form-item>
+
+        <n-form-item label="匹配选项">
+          <n-space vertical>
+            <n-checkbox v-model:checked="findReplaceForm.caseSensitive" :disabled="findReplaceProcessing">
+              区分大小写
+            </n-checkbox>
+            <n-checkbox v-model:checked="findReplaceForm.wholeWord" :disabled="findReplaceProcessing">
+              全词匹配
+            </n-checkbox>
+            <n-checkbox v-model:checked="findReplaceForm.useRegex" :disabled="findReplaceProcessing">
+              使用正则表达式
+            </n-checkbox>
+          </n-space>
+        </n-form-item>
+      </n-form>
+
+      <!-- 预览结果 -->
+      <template v-if="findReplacePreview.length > 0">
+        <n-divider />
+        <n-card title="预览替换结果" :bordered="false" size="small">
+          <template #header-extra>
+            <n-text depth="3">找到 {{ findReplacePreview.length }} 处匹配</n-text>
+          </template>
+          <n-scrollbar style="max-height: 200px">
+            <n-space vertical size="small">
+              <div v-for="(item, index) in findReplacePreview" :key="index" class="preview-item">
+                <n-text depth="3" style="font-size: 12px">
+                  标注 {{ index + 1 }} ({{ formatTime(item.annotation.start) }} - {{ formatTime(item.annotation.end) }})
+                </n-text>
+                <div class="preview-text">
+                  <n-text>{{ item.beforeText }}</n-text>
+                  <n-text type="error" style="background-color: #ffe6e6; padding: 2px 4px; border-radius: 2px">
+                    {{ item.matchText }}
+                  </n-text>
+                  <n-text>{{ item.afterText }}</n-text>
+                </div>
+                <div class="preview-text">
+                  <n-text>{{ item.beforeText }}</n-text>
+                  <n-text type="success" style="background-color: #e6ffe6; padding: 2px 4px; border-radius: 2px">
+                    {{ findReplaceForm.replaceText }}
+                  </n-text>
+                  <n-text>{{ item.afterText }}</n-text>
+                </div>
+              </div>
+            </n-space>
+          </n-scrollbar>
+        </n-card>
+      </template>
+
+      <n-space justify="end">
+        <n-button @click="handleCloseFindReplace" :disabled="findReplaceProcessing">取消</n-button>
+        <n-button @click="handlePreviewReplace" :disabled="!findReplaceForm.findText || findReplaceProcessing">
+          预览
+        </n-button>
+        <n-button type="primary" @click="handleExecuteReplace" 
+          :disabled="findReplacePreview.length === 0 || findReplaceProcessing" :loading="findReplaceProcessing">
+          执行替换
+        </n-button>
+      </n-space>
+    </n-space>
+  </n-modal>
+
 </template>
 
 <script setup lang="ts">
@@ -400,6 +493,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useProjectStore } from '~/stores/project'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
+import type { Annotation } from '~/types/project'
 import { useAudioPlayer } from '~/composables/useAudioPlayer'
 import { useExport } from '~/composables/useExport'
 import { useThrottleFn } from '@vueuse/core'
@@ -472,6 +566,23 @@ const volume = ref(100)
 let playheadUpdateTimer: number | null = null
 const transcribing = ref(false)
 const showExportModal = ref(false)
+const showFindReplaceModal = ref(false)
+
+// 批量查找替换相关状态
+const findReplaceForm = ref({
+  findText: '',
+  replaceText: '',
+  caseSensitive: false,
+  wholeWord: false,
+  useRegex: false
+})
+const findReplacePreview = ref<Array<{
+  annotation: Annotation
+  matchText: string
+  beforeText: string
+  afterText: string
+}>>([])
+const findReplaceProcessing = ref(false)
 
 
 // 页面尺寸监听 - 视口大小变化时更新状态
@@ -597,6 +708,122 @@ const handleSaveNote = async () => {
   } catch (error) {
     message.error('更新备注失败')
   }
+}
+
+// 批量查找替换相关函数
+const handleCloseFindReplace = () => {
+  showFindReplaceModal.value = false
+  findReplaceForm.value = {
+    findText: '',
+    replaceText: '',
+    caseSensitive: false,
+    wholeWord: false,
+    useRegex: false
+  }
+  findReplacePreview.value = []
+}
+
+const handlePreviewReplace = () => {
+  const { findText, caseSensitive, wholeWord, useRegex } = findReplaceForm.value
+  if (!findText.trim()) return
+
+  findReplacePreview.value = []
+  const annotations = domAnnotationStore.currentAnnotations
+
+  try {
+    let searchPattern: RegExp
+    
+    if (useRegex) {
+      // 使用正则表达式
+      const flags = caseSensitive ? 'g' : 'gi'
+      searchPattern = new RegExp(findText, flags)
+    } else {
+      // 普通文本搜索
+      let escapedText = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (wholeWord) {
+        escapedText = `\\b${escapedText}\\b`
+      }
+      const flags = caseSensitive ? 'g' : 'gi'
+      searchPattern = new RegExp(escapedText, flags)
+    }
+
+    annotations.forEach(annotation => {
+      const matches = [...annotation.text.matchAll(searchPattern)]
+      matches.forEach(match => {
+        if (match.index !== undefined) {
+          const matchText = match[0]
+          const beforeText = annotation.text.substring(0, match.index)
+          const afterText = annotation.text.substring(match.index + matchText.length)
+          
+          findReplacePreview.value.push({
+            annotation,
+            matchText,
+            beforeText,
+            afterText
+          })
+        }
+      })
+    })
+
+    if (findReplacePreview.value.length === 0) {
+      message.info('未找到匹配的文本')
+    }
+  } catch (error) {
+    message.error('搜索模式无效，请检查正则表达式')
+  }
+}
+
+const handleExecuteReplace = async () => {
+  if (findReplacePreview.value.length === 0) return
+
+  findReplaceProcessing.value = true
+  try {
+    const { findText, replaceText, caseSensitive, wholeWord, useRegex } = findReplaceForm.value
+    
+    let searchPattern: RegExp
+    if (useRegex) {
+      const flags = caseSensitive ? 'g' : 'gi'
+      searchPattern = new RegExp(findText, flags)
+    } else {
+      let escapedText = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (wholeWord) {
+        escapedText = `\\b${escapedText}\\b`
+      }
+      const flags = caseSensitive ? 'g' : 'gi'
+      searchPattern = new RegExp(escapedText, flags)
+    }
+
+    // 获取需要更新的标注（去重）
+    const annotationsToUpdate = new Map<string, Annotation>()
+    findReplacePreview.value.forEach(item => {
+      annotationsToUpdate.set(item.annotation.id, item.annotation)
+    })
+
+    let updatedCount = 0
+    for (const annotation of annotationsToUpdate.values()) {
+      const newText = annotation.text.replace(searchPattern, replaceText)
+      if (newText !== annotation.text) {
+        await domAnnotationStore.updateAnnotation(annotation.id, { text: newText })
+        updatedCount++
+      }
+    }
+
+    message.success(`成功替换 ${updatedCount} 个标注中的文本`)
+    handleCloseFindReplace()
+  } catch (error) {
+    message.error('替换失败：' + (error instanceof Error ? error.message : '未知错误'))
+  } finally {
+    findReplaceProcessing.value = false
+  }
+}
+
+// 格式化时间函数
+const formatTime = (seconds: number): string => {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  const milliseconds = Math.floor((seconds % 1) * 1000)
+  
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`
 }
 
 const { transcribe } = useWhisper()

@@ -44,7 +44,8 @@ import {
   NDescriptions,
   NDescriptionsItem,
   NAlert,
-  NSlider
+  NSlider,
+  NCheckbox
 } from 'naive-ui'
 
 // 导入图标组件
@@ -94,7 +95,8 @@ export default defineNuxtPlugin((nuxtApp) => {
       NDescriptions,
       NDescriptionsItem,
       NAlert,
-      NSlider
+      NSlider,
+      NCheckbox
     ]
   })
 
@@ -128,4 +130,4 @@ export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.component('n-icon', NIcon)
   nuxtApp.vueApp.component('icon-play', Play)
   nuxtApp.vueApp.component('icon-pause', Pause)
-}) 
+})
