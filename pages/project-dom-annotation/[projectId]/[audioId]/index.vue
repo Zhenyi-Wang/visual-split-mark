@@ -526,6 +526,9 @@ const getViewportStorageKey = (): string => {
 }
 
 const saveViewportState = () => {
+  // 只有在视口状态恢复完成后才保存
+  if (!domAnnotationStore.isViewportRestored) return;
+  
   if (!domAnnotationStore.currentAudioFile) return // 确保音频文件已加载，避免无效保存
 
   const stateToSave = {
@@ -545,7 +548,10 @@ const throttledSaveViewportState = useThrottleFn(saveViewportState, 500) // 每5
 watch(
   () => domAnnotationStore.viewportState,
   () => {
-    throttledSaveViewportState()
+    // 只有在视口状态恢复完成后才保存
+    if (domAnnotationStore.isViewportRestored) {
+      throttledSaveViewportState()
+    }
   },
   { deep: true }
 )
@@ -1184,6 +1190,9 @@ onMounted(async () => {
         const initialDuration = Math.min(30, audioPlayer.duration.value)
         domAnnotationStore.moveAndZoomView(0, initialDuration)
       }
+      
+      // 设置视口状态恢复完成标志
+      domAnnotationStore.isViewportRestored = true;
       
       // 音频加载完成后的最终处理
       loadingStatus.value = '加载完成'

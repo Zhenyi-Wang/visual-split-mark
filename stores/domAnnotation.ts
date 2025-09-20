@@ -37,6 +37,8 @@ interface DOMAnnotationState {
     data: Float32Array | number[] | null
     peaks: number[] | null
   }
+  // 视口状态恢复完成标志
+  isViewportRestored: boolean
   // 错误状态
   error: string | null
 }
@@ -83,6 +85,8 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
       data: null,
       peaks: null
     },
+    // 视口状态恢复完成标志
+    isViewportRestored: false,
     // 错误状态
     error: null
   }),
@@ -180,6 +184,8 @@ export const useDOMAnnotationStore = defineStore('domAnnotation', {
           end: 1
         }
       }
+      // 重置视口状态恢复标志
+      this.isViewportRestored = false
     },
     
     // 重置播放状态
