@@ -3,6 +3,8 @@ export interface Project {
   name: string
   description?: string
   whisperApiUrl?: string
+  transcribeApiUrl?: string
+  transcribeApiToken?: string
   createdAt: Date
   updatedAt: Date
 }

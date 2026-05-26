@@ -30,7 +30,7 @@
               ghost
               @click="handleTranscribe"
               :loading="transcribing"
-              :disabled="!currentProject?.whisperApiUrl"
+              :disabled="!currentProject?.whisperApiUrl && !currentProject?.transcribeApiUrl"
             >
               识别文本
             </n-button>
@@ -447,7 +447,7 @@
       :show-icon="true"
     >
       <n-space vertical>
-        <div>此操作将使用 Whisper API 识别音频中的文本。</div>
+        <div>此操作将使用 {{ transcribeServiceName }} 识别音频中的文本。</div>
         <template v-if="annotations.length > 0">
           <n-alert type="warning" :show-icon="true">
             <template #header>
@@ -545,10 +545,12 @@ import type { ComponentPublicInstance } from 'vue'
 import type { Annotation, AudioFile } from '~/types/project'
 import type { WhisperResult } from '~/utils/whisper'
 import type { MergeDirection } from '~/types/audio'
+import type { TranscribeServiceResult } from '~/utils/transcribeService'
 import { storage } from '~/utils/storage'
 import { useAudioVisualizer } from '~/composables/useAudioVisualizer'
 import { useAudioPlayer, type LoadingPhase } from '~/composables/useAudioPlayer'
 import { useWhisper } from '~/composables/useWhisper'
+import { useTranscribeService } from '~/composables/useTranscribeService'
 import {
   AddCircleOutline as IconZoomIn,
   RemoveCircleOutline as IconZoomOut,
@@ -584,6 +586,7 @@ const projectStore = useProjectStore()
 const message = useMessage()
 const viewport = useViewportStore()
 const { transcribe } = useWhisper()
+const { transcribe: transcribeWithService } = useTranscribeService()
 
 // 添加缺失的响应式变量
 const transcribing = ref(false)
@@ -1093,11 +1096,14 @@ const transcribeResult = ref<{
 
 // 添加识别确认对话框的状态
 const showTranscribeConfirmModal = ref(false)
+const transcribeServiceName = computed(() =>
+  currentProject.value?.whisperApiUrl ? 'Whisper API' : '转录服务'
+)
 
 // 修改识别处理函数
 const handleTranscribe = () => {
-  if (!currentProject.value?.whisperApiUrl) {
-    message.error('未配置 Whisper API URL')
+  if (!currentProject.value?.whisperApiUrl && !currentProject.value?.transcribeApiUrl) {
+    message.error('未配置转录服务')
     return
   }
   showTranscribeConfirmModal.value = true
@@ -1109,7 +1115,10 @@ const handleConfirmTranscribe = async () => {
   showTranscribeConfirmModal.value = false
   transcribing.value = true
   try {
-    const annotations = await transcribe(currentAudioFile.value)
+    const doTranscribe = currentProject.value?.whisperApiUrl
+      ? transcribe
+      : transcribeWithService
+    const annotations = await doTranscribe(currentAudioFile.value)
     transcribeResult.value = {
       success: true,
       message: '文本识别完成',

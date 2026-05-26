@@ -83,12 +83,39 @@
             placeholder="请输入项目描述"
           />
         </n-form-item>
-        <n-form-item label="Whisper API 地址" path="whisperApiUrl">
-          <n-input
-            v-model:value="formModel.whisperApiUrl"
-            placeholder="请输入 Whisper API 地址"
-          />
+        <n-form-item label="转录服务">
+          <n-radio-group v-model:value="formModel.transcribeType">
+            <n-space>
+              <n-radio value="whisper">Whisper API</n-radio>
+              <n-radio value="transcribeService">转录服务 (transcribe-service)</n-radio>
+              <n-radio value="none">不配置</n-radio>
+            </n-space>
+          </n-radio-group>
         </n-form-item>
+        <template v-if="formModel.transcribeType === 'whisper'">
+          <n-form-item label="Whisper API 地址" path="whisperApiUrl">
+            <n-input
+              v-model:value="formModel.whisperApiUrl"
+              placeholder="请输入 Whisper API 地址"
+            />
+          </n-form-item>
+        </template>
+        <template v-if="formModel.transcribeType === 'transcribeService'">
+          <n-form-item label="转录服务 API 地址" path="transcribeApiUrl">
+            <n-input
+              v-model:value="formModel.transcribeApiUrl"
+              placeholder="如 http://localhost:31080/transcribe"
+            />
+          </n-form-item>
+          <n-form-item label="转录服务 Token" path="transcribeApiToken">
+            <n-input
+              v-model:value="formModel.transcribeApiToken"
+              type="password"
+              show-password-on="click"
+              placeholder="可选，留空则不认证"
+            />
+          </n-form-item>
+        </template>
       </n-form>
       <template #action>
         <n-space>
@@ -138,7 +165,10 @@ const formModel = ref({
   id: '',
   name: '',
   description: '',
+  transcribeType: 'none' as 'whisper' | 'transcribeService' | 'none',
   whisperApiUrl: '',
+  transcribeApiUrl: '',
+  transcribeApiToken: '',
 })
 
 const rules: FormRules = {
@@ -161,11 +191,19 @@ const formatDate = (date: Date) => {
 
 const handleEditProject = (project: Project) => {
   isEditing.value = true
+  const transcribeType = project.whisperApiUrl
+    ? 'whisper'
+    : project.transcribeApiUrl
+      ? 'transcribeService'
+      : 'none'
   formModel.value = {
     id: project.id,
     name: project.name,
     description: project.description || '',
+    transcribeType,
     whisperApiUrl: project.whisperApiUrl || '',
+    transcribeApiUrl: project.transcribeApiUrl || '',
+    transcribeApiToken: project.transcribeApiToken || '',
   }
   showCreateModal.value = true
 }
@@ -195,7 +233,10 @@ const handleCancel = () => {
     id: '',
     name: '',
     description: '',
+    transcribeType: 'none',
     whisperApiUrl: '',
+    transcribeApiUrl: '',
+    transcribeApiToken: '',
   }
 }
 
@@ -203,13 +244,26 @@ const handleSubmit = () => {
   formRef.value?.validate(async errors => {
     if (!errors) {
       try {
+        // 根据选择的类型，只保留对应服务的配置
+        const whisperApiUrl = formModel.value.transcribeType === 'whisper'
+          ? formModel.value.whisperApiUrl
+          : undefined
+        const transcribeApiUrl = formModel.value.transcribeType === 'transcribeService'
+          ? formModel.value.transcribeApiUrl
+          : undefined
+        const transcribeApiToken = formModel.value.transcribeType === 'transcribeService'
+          ? formModel.value.transcribeApiToken
+          : undefined
+
         if (isEditing.value) {
           await projectStore.updateProject({
             id: formModel.value.id,
             name: formModel.value.name,
             description: formModel.value.description,
-            whisperApiUrl: formModel.value.whisperApiUrl,
-            createdAt: new Date(), // 这个值会被 store 忽略
+            whisperApiUrl,
+            transcribeApiUrl,
+            transcribeApiToken,
+            createdAt: new Date(),
             updatedAt: new Date(),
           })
           message.success('项目已更新')
@@ -217,7 +271,9 @@ const handleSubmit = () => {
           await projectStore.createProject(
             formModel.value.name,
             formModel.value.description,
-            formModel.value.whisperApiUrl
+            whisperApiUrl,
+            transcribeApiUrl,
+            transcribeApiToken
           )
           message.success('项目已创建')
         }

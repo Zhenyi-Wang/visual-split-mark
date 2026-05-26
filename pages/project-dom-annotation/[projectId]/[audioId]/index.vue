@@ -23,7 +23,7 @@
               清除所有标注
             </n-button>
             <n-button type="primary" ghost @click="handleTranscribe" :loading="transcribing"
-              :disabled="!currentProject?.whisperApiUrl">
+              :disabled="!currentProject?.whisperApiUrl && !currentProject?.transcribeApiUrl">
               识别文本
             </n-button>
             <n-button type="info" ghost @click="showFindReplaceModal = true"
@@ -334,7 +334,7 @@
   <!-- 添加识别确认对话框 -->
   <n-modal v-model:show="showTranscribeConfirmModal" preset="dialog" title="确认识别文本" type="warning" :show-icon="true">
     <n-space vertical>
-      <div>此操作将使用 Whisper API 识别音频中的文本。</div>
+      <div>此操作将使用 {{ transcribeServiceName }} 识别音频中的文本。</div>
       <template v-if="domAnnotationStore.currentAnnotations.length > 0">
         <n-alert type="warning" :show-icon="true">
           <template #header>
@@ -495,6 +495,8 @@ import { useProjectStore } from '~/stores/project'
 import { useDOMAnnotationStore } from '~/stores/domAnnotation'
 import type { Annotation } from '~/types/project'
 import { useAudioPlayer } from '~/composables/useAudioPlayer'
+import { useWhisper } from '~/composables/useWhisper'
+import { useTranscribeService } from '~/composables/useTranscribeService'
 import { useExport } from '~/composables/useExport'
 import { useThrottleFn } from '@vueuse/core'
 import { loadAudioBlobWithProgress } from '~/utils/file'
@@ -833,6 +835,11 @@ const formatTime = (seconds: number): string => {
 }
 
 const { transcribe } = useWhisper()
+const { transcribe: transcribeWithService } = useTranscribeService()
+
+const transcribeServiceName = computed(() =>
+  currentProject.value?.whisperApiUrl ? 'Whisper API' : '转录服务'
+)
 
 // 添加确认识别的处理函数
 const handleConfirmTranscribe = async () => {
@@ -840,7 +847,10 @@ const handleConfirmTranscribe = async () => {
   showTranscribeConfirmModal.value = false
   transcribing.value = true
   try {
-    const annotations = await transcribe(currentAudioFile.value)
+    const doTranscribe = currentProject.value?.whisperApiUrl
+      ? transcribe
+      : transcribeWithService
+    const annotations = await doTranscribe(currentAudioFile.value)
     transcribeResult.value = {
       success: true,
       message: '文本识别完成',
@@ -873,8 +883,8 @@ const showTranscribeConfirmModal = ref(false)
 
 // 修改识别处理函数
 const handleTranscribe = () => {
-  if (!currentProject.value?.whisperApiUrl) {
-    message.error('未配置 Whisper API URL')
+  if (!currentProject.value?.whisperApiUrl && !currentProject.value?.transcribeApiUrl) {
+    message.error('未配置转录服务')
     return
   }
   showTranscribeConfirmModal.value = true

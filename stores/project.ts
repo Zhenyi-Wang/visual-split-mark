@@ -178,7 +178,9 @@ export const useProjectStore = defineStore('project', {
     async createProject(
       name: string,
       description?: string,
-      whisperApiUrl?: string
+      whisperApiUrl?: string,
+      transcribeApiUrl?: string,
+      transcribeApiToken?: string
     ) {
       this.loading = true
       this.error = null
@@ -188,6 +190,8 @@ export const useProjectStore = defineStore('project', {
           name,
           description,
           whisperApiUrl,
+          transcribeApiUrl,
+          transcribeApiToken,
           createdAt: new Date(),
           updatedAt: new Date(),
         }
