@@ -1,43 +1,33 @@
-import { useMessage } from 'naive-ui'
-import { transcribeAudio, type WhisperResult } from '~/utils/whisper'
-import type { Project, AudioFile, Annotation } from '~/types/project'
+export interface WhisperSegment {
+  start: number
+  end: number
+  text: string
+}
 
-export function useWhisper() {
-  const projectStore = useProjectStore()
-  const message = useMessage()
+export interface WhisperResult {
+  segments: WhisperSegment[]
+}
 
-  const transcribe = async (audioFile: AudioFile) => {
-    const currentProject = projectStore.currentProject
-    if (!currentProject) {
-      throw new Error('No project selected')
-    }
-
-    if (!currentProject.whisperApiUrl) {
-      throw new Error('Whisper API URL not configured')
-    }
-
-    // 调用 Whisper API
-    const result = await transcribeAudio(currentProject, audioFile.wavPath)
-
-    // 将识别结果转换为标注
-    const annotations: Annotation[] = result.segments.map(segment => ({
-      id: crypto.randomUUID(),
-      audioFileId: audioFile.id,
-      start: segment.start,
-      end: segment.end,
-      text: segment.text.trim(),
-      whisperText: segment.text.trim(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }))
-
-    // 批量保存标注
-    await projectStore.updateAnnotations(annotations)
-
-    return annotations
+export async function transcribeWithWhisper(audioPath: string, apiUrl: string): Promise<WhisperResult> {
+  if (!apiUrl) {
+    throw new Error('Whisper API 地址未配置')
   }
 
-  return {
-    transcribe
+  const response = await fetch('/api/whisper/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({
+      audioPath,
+      whisperApiUrl: apiUrl,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText)
   }
-} 
+
+  return response.json()
+}

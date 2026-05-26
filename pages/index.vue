@@ -4,6 +4,9 @@
       <n-space justify="space-between">
         <n-h1>项目列表</n-h1>
         <n-space>
+          <n-button @click="handleOpenSettings">
+            设置
+          </n-button>
           <n-button type="primary" @click="navigateToExportManager">
             导出管理
           </n-button>
@@ -83,39 +86,6 @@
             placeholder="请输入项目描述"
           />
         </n-form-item>
-        <n-form-item label="转录服务">
-          <n-radio-group v-model:value="formModel.transcribeType">
-            <n-space>
-              <n-radio value="whisper">Whisper API</n-radio>
-              <n-radio value="transcribeService">转录服务 (transcribe-service)</n-radio>
-              <n-radio value="none">不配置</n-radio>
-            </n-space>
-          </n-radio-group>
-        </n-form-item>
-        <template v-if="formModel.transcribeType === 'whisper'">
-          <n-form-item label="Whisper API 地址" path="whisperApiUrl">
-            <n-input
-              v-model:value="formModel.whisperApiUrl"
-              placeholder="请输入 Whisper API 地址"
-            />
-          </n-form-item>
-        </template>
-        <template v-if="formModel.transcribeType === 'transcribeService'">
-          <n-form-item label="转录服务 API 地址" path="transcribeApiUrl">
-            <n-input
-              v-model:value="formModel.transcribeApiUrl"
-              placeholder="如 http://localhost:31080/transcribe"
-            />
-          </n-form-item>
-          <n-form-item label="转录服务 Token" path="transcribeApiToken">
-            <n-input
-              v-model:value="formModel.transcribeApiToken"
-              type="password"
-              show-password-on="click"
-              placeholder="可选，留空则不认证"
-            />
-          </n-form-item>
-        </template>
       </n-form>
       <template #action>
         <n-space>
@@ -137,6 +107,39 @@
         >确定要删除项目 "{{ projectToDelete?.name }}"
         吗？此操作不可恢复。</n-text
       >
+    </n-modal>
+
+    <n-modal v-model:show="showSettingsModal" preset="dialog" title="全局设置">
+      <n-form>
+        <n-form-item label="转录服务">
+          <n-radio-group v-model:value="settingsForm.transcribeType">
+            <n-space>
+              <n-radio value="whisper">Whisper API</n-radio>
+              <n-radio value="transcribeService">转录服务 (transcribe-service)</n-radio>
+              <n-radio value="none">不配置</n-radio>
+            </n-space>
+          </n-radio-group>
+        </n-form-item>
+        <template v-if="settingsForm.transcribeType === 'whisper'">
+          <n-form-item label="Whisper API 地址">
+            <n-input v-model:value="settingsForm.whisperApiUrl" placeholder="请输入 Whisper API 地址" />
+          </n-form-item>
+        </template>
+        <template v-if="settingsForm.transcribeType === 'transcribeService'">
+          <n-form-item label="转录服务 API 地址">
+            <n-input v-model:value="settingsForm.transcribeApiUrl" placeholder="如 http://localhost:31080/transcribe" />
+          </n-form-item>
+          <n-form-item label="转录服务 Token">
+            <n-input v-model:value="settingsForm.transcribeApiToken" type="password" show-password-on="click" placeholder="可选，留空则不认证" />
+          </n-form-item>
+        </template>
+      </n-form>
+      <template #action>
+        <n-space>
+          <n-button @click="showSettingsModal = false">取消</n-button>
+          <n-button type="primary" @click="handleSaveSettings">保存</n-button>
+        </n-space>
+      </template>
     </n-modal>
   </div>
 </template>
@@ -160,15 +163,41 @@ const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const projectToDelete = ref<Project | null>(null)
 
+// 全局设置
+const { settings: globalSettings, loadSettings, saveSettings } = useSettings()
+const showSettingsModal = ref(false)
+const settingsForm = ref({
+  transcribeType: 'none' as 'whisper' | 'transcribeService' | 'none',
+  whisperApiUrl: '',
+  transcribeApiUrl: '',
+  transcribeApiToken: '',
+})
+
+const handleOpenSettings = () => {
+  settingsForm.value = {
+    transcribeType: globalSettings.value.transcribeType,
+    whisperApiUrl: globalSettings.value.whisperApiUrl,
+    transcribeApiUrl: globalSettings.value.transcribeApiUrl,
+    transcribeApiToken: globalSettings.value.transcribeApiToken,
+  }
+  showSettingsModal.value = true
+}
+
+const handleSaveSettings = async () => {
+  try {
+    await saveSettings(settingsForm.value)
+    message.success('设置已保存')
+    showSettingsModal.value = false
+  } catch {
+    message.error('保存设置失败')
+  }
+}
+
 const formRef = ref<FormInst | null>(null)
 const formModel = ref({
   id: '',
   name: '',
   description: '',
-  transcribeType: 'none' as 'whisper' | 'transcribeService' | 'none',
-  whisperApiUrl: '',
-  transcribeApiUrl: '',
-  transcribeApiToken: '',
 })
 
 const rules: FormRules = {
@@ -183,6 +212,7 @@ const projects = computed(() => projectStore.projects)
 
 onMounted(async () => {
   await projectStore.initialize()
+  await loadSettings()
 })
 
 const formatDate = (date: Date) => {
@@ -191,19 +221,10 @@ const formatDate = (date: Date) => {
 
 const handleEditProject = (project: Project) => {
   isEditing.value = true
-  const transcribeType = project.whisperApiUrl
-    ? 'whisper'
-    : project.transcribeApiUrl
-      ? 'transcribeService'
-      : 'none'
   formModel.value = {
     id: project.id,
     name: project.name,
     description: project.description || '',
-    transcribeType,
-    whisperApiUrl: project.whisperApiUrl || '',
-    transcribeApiUrl: project.transcribeApiUrl || '',
-    transcribeApiToken: project.transcribeApiToken || '',
   }
   showCreateModal.value = true
 }
@@ -233,10 +254,6 @@ const handleCancel = () => {
     id: '',
     name: '',
     description: '',
-    transcribeType: 'none',
-    whisperApiUrl: '',
-    transcribeApiUrl: '',
-    transcribeApiToken: '',
   }
 }
 
@@ -244,36 +261,20 @@ const handleSubmit = () => {
   formRef.value?.validate(async errors => {
     if (!errors) {
       try {
-        // 根据选择的类型，只保留对应服务的配置
-        const whisperApiUrl = formModel.value.transcribeType === 'whisper'
-          ? formModel.value.whisperApiUrl
-          : undefined
-        const transcribeApiUrl = formModel.value.transcribeType === 'transcribeService'
-          ? formModel.value.transcribeApiUrl
-          : undefined
-        const transcribeApiToken = formModel.value.transcribeType === 'transcribeService'
-          ? formModel.value.transcribeApiToken
-          : undefined
-
         if (isEditing.value) {
+          const existing = projectStore.projects.find(p => p.id === formModel.value.id)
           await projectStore.updateProject({
             id: formModel.value.id,
             name: formModel.value.name,
             description: formModel.value.description,
-            whisperApiUrl,
-            transcribeApiUrl,
-            transcribeApiToken,
-            createdAt: new Date(),
+            createdAt: existing?.createdAt || new Date(),
             updatedAt: new Date(),
           })
           message.success('项目已更新')
         } else {
           await projectStore.createProject(
             formModel.value.name,
-            formModel.value.description,
-            whisperApiUrl,
-            transcribeApiUrl,
-            transcribeApiToken
+            formModel.value.description
           )
           message.success('项目已创建')
         }

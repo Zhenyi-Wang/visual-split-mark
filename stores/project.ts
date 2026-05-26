@@ -177,10 +177,7 @@ export const useProjectStore = defineStore('project', {
 
     async createProject(
       name: string,
-      description?: string,
-      whisperApiUrl?: string,
-      transcribeApiUrl?: string,
-      transcribeApiToken?: string
+      description?: string
     ) {
       this.loading = true
       this.error = null
@@ -189,9 +186,6 @@ export const useProjectStore = defineStore('project', {
           id: crypto.randomUUID(),
           name,
           description,
-          whisperApiUrl,
-          transcribeApiUrl,
-          transcribeApiToken,
           createdAt: new Date(),
           updatedAt: new Date(),
         }

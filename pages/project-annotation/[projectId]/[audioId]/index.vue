@@ -28,15 +28,6 @@
             <n-button
               type="primary"
               ghost
-              @click="handleTranscribe"
-              :loading="transcribing"
-              :disabled="!currentProject?.whisperApiUrl && !currentProject?.transcribeApiUrl"
-            >
-              识别文本
-            </n-button>
-            <n-button
-              type="primary"
-              ghost
               @click="showExportModal = true"
               :disabled="!annotations.length"
             >
@@ -410,72 +401,6 @@
       </template>
     </n-modal>
 
-    <!-- 添加识别结果对话框 -->
-    <n-modal
-      v-model:show="showTranscribeResultModal"
-      preset="card"
-      title="识别结果"
-      style="width: 500px"
-      :closable="true"
-      :mask-closable="false"
-    >
-      <n-space vertical>
-        <n-result
-          :status="transcribeResult.success ? 'success' : 'error'"
-          :title="transcribeResult.success ? '识别成功' : '识别失败'"
-          :description="
-            transcribeResult.success
-              ? `文本识别完成，共识别出 ${transcribeResult.count} 个片段。\n\n视图更新可能需要一些时间，如果没有看到最新结果，可以手动刷新页面。\n\n请检查识别结果，如有需要可以手动修改。`
-              : transcribeResult.message
-          "
-        />
-        <n-space justify="end">
-          <n-button @click="() => router.go(0)">刷新页面</n-button>
-          <n-button type="primary" @click="showTranscribeResultModal = false">
-            {{ transcribeResult.success ? '开始编辑' : '关闭' }}
-          </n-button>
-        </n-space>
-      </n-space>
-    </n-modal>
-
-    <!-- 添加识别确认对话框 -->
-    <n-modal
-      v-model:show="showTranscribeConfirmModal"
-      preset="dialog"
-      title="确认识别文本"
-      type="warning"
-      :show-icon="true"
-    >
-      <n-space vertical>
-        <div>此操作将使用 {{ transcribeServiceName }} 识别音频中的文本。</div>
-        <template v-if="annotations.length > 0">
-          <n-alert type="warning" :show-icon="true">
-            <template #header>
-              <span style="font-weight: 500"
-                >当前音频已有 {{ annotations.length }} 条标注</span
-              >
-            </template>
-            新的识别结果将追加到现有标注之后，请谨慎操作。
-          </n-alert>
-        </template>
-        <div>注意：</div>
-        <ul style="margin: 0; padding-left: 20px">
-          <li>识别过程可能需要较长时间，请耐心等待</li>
-          <li>识别结果可能不够准确，建议在识别后进行人工校正</li>
-          <li>如果已有标注，新的识别结果会追加到现有标注之后</li>
-        </ul>
-      </n-space>
-
-      <template #action>
-        <n-space>
-          <n-button @click="showTranscribeConfirmModal = false">取消</n-button>
-          <n-button type="warning" @click="handleConfirmTranscribe"
-            >开始识别</n-button
-          >
-        </n-space>
-      </template>
-    </n-modal>
-
     <!-- 添加清除所有标注确认对话框 -->
     <n-modal
       v-model:show="showClearAllModal"
@@ -543,14 +468,13 @@ import { useMessage } from 'naive-ui'
 import type { FormInst, FormRules } from 'naive-ui'
 import type { ComponentPublicInstance } from 'vue'
 import type { Annotation, AudioFile } from '~/types/project'
-import type { WhisperResult } from '~/utils/whisper'
+
 import type { MergeDirection } from '~/types/audio'
-import type { TranscribeServiceResult } from '~/utils/transcribeService'
+
 import { storage } from '~/utils/storage'
 import { useAudioVisualizer } from '~/composables/useAudioVisualizer'
 import { useAudioPlayer, type LoadingPhase } from '~/composables/useAudioPlayer'
-import { useWhisper } from '~/composables/useWhisper'
-import { useTranscribeService } from '~/composables/useTranscribeService'
+
 import {
   AddCircleOutline as IconZoomIn,
   RemoveCircleOutline as IconZoomOut,
@@ -585,11 +509,7 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const message = useMessage()
 const viewport = useViewportStore()
-const { transcribe } = useWhisper()
-const { transcribe: transcribeWithService } = useTranscribeService()
-
 // 添加缺失的响应式变量
-const transcribing = ref(false)
 const exporting = ref(false)
 const currentProject = computed(() => projectStore.currentProject)
 
@@ -1080,58 +1000,6 @@ const handleSubmit = async () => {
     message.success('标注已更新')
   } catch (error) {
     console.error('Validation failed:', error)
-  }
-}
-
-// 添加识别结果对话框的状态
-const showTranscribeResultModal = ref(false)
-const transcribeResult = ref<{
-  success: boolean
-  message: string
-  count?: number
-}>({
-  success: false,
-  message: '',
-})
-
-// 添加识别确认对话框的状态
-const showTranscribeConfirmModal = ref(false)
-const transcribeServiceName = computed(() =>
-  currentProject.value?.whisperApiUrl ? 'Whisper API' : '转录服务'
-)
-
-// 修改识别处理函数
-const handleTranscribe = () => {
-  if (!currentProject.value?.whisperApiUrl && !currentProject.value?.transcribeApiUrl) {
-    message.error('未配置转录服务')
-    return
-  }
-  showTranscribeConfirmModal.value = true
-}
-
-// 添加确认识别的处理函数
-const handleConfirmTranscribe = async () => {
-  if (!currentAudioFile.value) return
-  showTranscribeConfirmModal.value = false
-  transcribing.value = true
-  try {
-    const doTranscribe = currentProject.value?.whisperApiUrl
-      ? transcribe
-      : transcribeWithService
-    const annotations = await doTranscribe(currentAudioFile.value)
-    transcribeResult.value = {
-      success: true,
-      message: '文本识别完成',
-      count: annotations.length,
-    }
-  } catch (error) {
-    transcribeResult.value = {
-      success: false,
-      message: error instanceof Error ? error.message : '文本识别失败',
-    }
-  } finally {
-    transcribing.value = false
-    showTranscribeResultModal.value = true
   }
 }
 

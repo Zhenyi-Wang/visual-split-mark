@@ -97,6 +97,15 @@
                     >
                       标注
                     </n-button>
+                    <n-button
+                      type="warning"
+                      @click="handleTranscribe(file)"
+                      :disabled="file.status !== 'ready' || getAnnotationCount(file.id) > 0 || !isTranscribeConfigured || !!transcribingFileId"
+                      :loading="transcribingFileId === file.id"
+                      :title="!isTranscribeConfigured ? '请先在首页「设置」中配置转录服务' : getAnnotationCount(file.id) > 0 ? '该音频已有标注，无法识别' : '识别音频文本'"
+                    >
+                      识别
+                    </n-button>
                   </n-space>
                 </n-space>
               </template>
@@ -138,6 +147,27 @@
         吗？此操作不可恢复。</n-text
       >
     </n-modal>
+
+    <n-modal
+      v-model:show="showTranscribeConfirmModal"
+      preset="dialog"
+      title="确认识别文本"
+      type="warning"
+    >
+      <div>确定要识别 "{{ fileToTranscribe?.originalName }}" 的文本吗？</div>
+      <div style="margin-top: 8px; color: #999; font-size: 13px;">
+        <ul style="padding-left: 20px; margin: 4px 0;">
+          <li>识别过程可能需要较长时间，请耐心等待</li>
+          <li>识别结果可能不够准确，建议识别后进行人工校正</li>
+        </ul>
+      </div>
+      <template #action>
+        <n-space>
+          <n-button @click="showTranscribeConfirmModal = false">取消</n-button>
+          <n-button type="warning" @click="handleConfirmTranscribe">开始识别</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -166,6 +196,8 @@ import { uploader } from '~/utils/uploader'
 import { nanoid } from 'nanoid'
 import { storage } from '~/utils/storage'
 import { useHead } from 'unhead'
+import { transcribeWithWhisper } from '~/composables/useWhisper'
+import { transcribeWithService } from '~/composables/useTranscribeService'
 
 const route = useRoute()
 const router = useRouter()
@@ -180,6 +212,50 @@ const uploadProgress = ref(0)
 const isUploading = ref(false)
 const isConverting = ref(false)
 const currentStatus = ref('')
+const { settings: globalSettings, loadSettings, isTranscribeConfigured } = useSettings()
+const transcribingFileId = ref<string | null>(null)
+const showTranscribeConfirmModal = ref(false)
+const fileToTranscribe = ref<AudioFile | null>(null)
+
+const handleTranscribe = (file: AudioFile) => {
+  if (!isTranscribeConfigured.value) return
+  fileToTranscribe.value = file
+  showTranscribeConfirmModal.value = true
+}
+
+const handleConfirmTranscribe = async () => {
+  const file = fileToTranscribe.value
+  if (!file || !currentProject.value) return
+  showTranscribeConfirmModal.value = false
+  transcribingFileId.value = file.id
+
+  try {
+    await projectStore.setCurrentAudioFile(file)
+
+    const segments = globalSettings.value.transcribeType === 'whisper'
+      ? (await transcribeWithWhisper(file.wavPath, globalSettings.value.whisperApiUrl)).segments
+      : await transcribeWithService(file.wavPath, globalSettings.value.transcribeApiUrl, globalSettings.value.transcribeApiToken)
+
+    const annotations = segments.map(seg => ({
+      id: crypto.randomUUID(),
+      audioFileId: file.id,
+      start: seg.start,
+      end: seg.end,
+      text: seg.text,
+      whisperText: seg.text,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }))
+
+    await projectStore.updateAnnotations(annotations)
+    message.success(`识别完成，共 ${annotations.length} 个片段`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '识别失败')
+  } finally {
+    transcribingFileId.value = null
+    fileToTranscribe.value = null
+  }
+}
 
 // 修改定时器类型声明
 const convertingTimer = ref<NodeJS.Timeout | null>(null)
@@ -195,13 +271,14 @@ useHead({
 
 onMounted(async () => {
   await projectStore.initialize()
+  await loadSettings()
   const project = projectStore.projects.find(p => p.id === route.params.id)
   if (!project) {
     message.error('项目不存在')
     router.push('/')
     return
   }
-  projectStore.setCurrentProject(project)
+  await projectStore.setCurrentProject(project)
 })
 
 const formatDate = (date: Date) => {

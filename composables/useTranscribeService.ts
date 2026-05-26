@@ -1,41 +1,58 @@
-import { useMessage } from 'naive-ui'
-import { callTranscribeService, convertTranscribeResult } from '~/utils/transcribeService'
-import type { Project, AudioFile, Annotation } from '~/types/project'
+export interface TranscribeSegment {
+  start: number
+  end: number
+  text: string
+}
 
-export function useTranscribeService() {
-  const projectStore = useProjectStore()
-  const message = useMessage()
+interface TranscribeServiceBody {
+  from: number
+  to: number
+  content: string
+}
 
-  const transcribe = async (audioFile: AudioFile) => {
-    const currentProject = projectStore.currentProject
-    if (!currentProject) {
-      throw new Error('No project selected')
-    }
+interface TranscribeServiceResult {
+  status: 'success' | 'error'
+  message?: string
+  body: TranscribeServiceBody[]
+}
 
-    if (!currentProject.transcribeApiUrl) {
-      throw new Error('转录服务 API 地址未配置')
-    }
+export async function transcribeWithService(
+  audioPath: string,
+  apiUrl: string,
+  apiToken?: string
+): Promise<TranscribeSegment[]> {
+  if (!apiUrl) {
+    throw new Error('转录服务 API 地址未配置')
+  }
 
-    const result = await callTranscribeService(currentProject, audioFile.wavPath)
-    const segments = convertTranscribeResult(result)
+  const response = await fetch('/api/transcribe-service/transcribe', {
+    method: 'POST',
+    body: JSON.stringify({
+      audioPath,
+      transcribeApiUrl: apiUrl,
+      transcribeApiToken: apiToken,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
 
-    const annotations: Annotation[] = segments.map(segment => ({
-      id: crypto.randomUUID(),
-      audioFileId: audioFile.id,
-      start: segment.start,
-      end: segment.end,
-      text: segment.text,
-      whisperText: segment.text,
-      createdAt: new Date(),
-      updatedAt: new Date()
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText)
+  }
+
+  const result: TranscribeServiceResult = await response.json()
+
+  if (result.status === 'error') {
+    throw new Error(result.message || '转录服务返回错误')
+  }
+
+  return result.body
+    .map(item => ({
+      start: item.from,
+      end: item.to,
+      text: item.content.trim(),
     }))
-
-    await projectStore.updateAnnotations(annotations)
-
-    return annotations
-  }
-
-  return {
-    transcribe
-  }
+    .filter(seg => seg.text.length > 0)
 }
